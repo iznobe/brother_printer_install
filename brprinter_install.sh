@@ -102,8 +102,9 @@ Url_Inf="http://www.brother.com/pub/bsc/linux/infs"
 Url_Pkg="http://www.brother.com/pub/bsc/linux/packages"
 
 Udev_Rules="/lib/udev/rules.d/60-libsane1.rules"
-Udev_Deb="brother-udev-rule-type1-1.0.2-0.all.deb"
-Udev_Deb_Url="http://download.brother.com/welcome/dlf006654/$Udev_Deb"
+Udev_Deb_Name="brother-udev-rule-type1-1.0.2-0.all.deb"
+Udev_Deb_Url="http://download.brother.com/welcome/dlf006654/$Udev_Deb_Name"
+Scankey_Drv_Deb_Name="brscan-skey-0.3.4-0.amd64.deb"
 Scankey_Drv_Deb_Url="https://download.brother.com/welcome/dlf006652/brscan-skey-0.3.4-0.amd64.deb"
 
 Blue="\\033[1;34m"
@@ -230,8 +231,8 @@ do_download_drivers() {
 		echo "# Recherche des pilotes du scanner" &>> "$Logfile"
 		log_action_begin_msg "Recherche des pilotes pour le scanner"
 		Scankey_Deb=$(wget -q "$Printer_Info" -O - | grep SCANKEY_DRV - | cut -d= -f2)
-		Scanner_Info="$Url_Inf/$Scanner_Deb.lnk"
-		Scankey_Info="$Url_Inf/$Scankey_Deb.lnk"
+		Scanner_Info="$Url_Inf/$Scanner_Deb.lnk" &>> "$Logfile"
+		Scankey_Info="$Url_Inf/$Scankey_Deb.lnk" &>> "$Logfile"
 
 		# On récupère les pilotes du scanner en fonctionnement de l'architecture du système (32-bits ou 64-bits)
 		case "$Arch" in
@@ -265,7 +266,7 @@ do_download_drivers() {
 	fi
 
 	echo -e "$Blue Téléchargement des pilotes $Resetcolor"
-	for pkg in "$Printer_Lpd_Deb" "$Printer_Cups_Deb" "$Printer_Drv_Deb" "$Scanner_Drv_Deb" "$Scankey_Drv_Deb" "$Udev_Deb"; do
+	for pkg in "$Printer_Lpd_Deb" "$Printer_Cups_Deb" "$Printer_Drv_Deb" "$Scanner_Drv_Deb" "$Scankey_Drv_Deb" "$Udev_Deb_Name"; do
 		# On ajoute la liste des pilotes trouvés au fichier de journalisation
 		if [[ -n "$pkg" ]]; then
 			echo " - Paquet trouvé : $pkg" &>> "$Logfile"
@@ -274,8 +275,8 @@ do_download_drivers() {
 				Url_Deb="$Url_Pkg"/"$pkg"
 				# le paquet 'udev-rules' et 'brscan-skey' sont situés a un autre emplacement
 				if [[ -n "$Scanner_Drv_Deb" ]]; then # on ne le telecharge qu ' en cas d ' install du scanner
-					if [[ "$pkg" == "$Udev_Deb" ]]; then Url_Deb="$Udev_Deb_Url"; fi
-					if [[ "$pkg" == "$Scankey_Drv_Deb" ]] && [[ $Arch == "x86_64" ]]; then Url_Deb="$Scankey_Drv_Deb_Url"; fi
+					if [[ "$pkg" == "$Udev_Deb_Name" ]]; then Url_Deb="$Udev_Deb_Url"; fi
+					if [[ "$pkg" == "$Scankey_Drv_Deb" ]] && [[ $Arch == "x86_64" ]]; then Url_Deb="$Scankey_Drv_Deb_Url"; pkg="$Scankey_Drv_Deb_Name"; fi
 				fi
 				echo " - Téléchargement du paquet : $pkg" &>> "$Logfile"
 				log_action_begin_msg "Téléchargement du paquet : $pkg"
@@ -296,7 +297,7 @@ do_download_drivers() {
 do_install_drivers() {
 	echo -e "$Blue Installation des pilotes $Resetcolor"
 	echo "# Installation des pilotes" &>> "$Logfile"
-	for pkg in "$Printer_Lpd_Deb" "$Printer_Cups_Deb" "$Printer_Drv_Deb" "$Scanner_Drv_Deb" "$Scankey_Drv_Deb" "$Udev_Deb"; do
+	for pkg in "$Printer_Lpd_Deb" "$Printer_Cups_Deb" "$Printer_Drv_Deb" "$Scanner_Drv_Deb" "$Scankey_Drv_Deb" "$Udev_Deb_Name" "$Scankey_Drv_Deb_Name"; do
 		if [[ -n "$pkg" ]] && [[ -f "$Temp_Dir/$pkg" ]]; then
 			log_action_begin_msg "Installation du paquet : $pkg"
 			echo " - Installation par 'dpkg' du paquet : $pkg" &>> "$Logfile"
@@ -304,7 +305,7 @@ do_install_drivers() {
 			log_action_end_msg $?
 		fi
 	done
-	echo " " &>> "$Logfile"
+	#echo " " &>> "$Logfile"
 }
 
 #################################
@@ -335,11 +336,11 @@ do_configure_printer() {
 	# On ajoute une nouvelle imprimante
 	log_action_begin_msg "Ajout de l'imprimante $Model_Name"
 	{
-		echo " - Ajout de l'imprimante $Model_Name
-		 - Backup du fichier /etc/cups/printers.conf.O"
+		echo " - Ajout de l'imprimante $Model_Name"
+		echo " - Backup du fichier /etc/cups/printers.conf.O"
 		cp /etc/cups/printers.conf.O "$Dir"
-		echo " - Arret du service CUPS
-		 - Restauration du fichier printers.conf"
+		echo " - Arret du service CUPS"
+		echo " - Restauration du fichier printers.conf"
 		systemctl stop cups
 		cp "$Dir"/printers.conf.O /etc/cups/printers.conf
 		echo " - Redémarrage du service CUPS"
@@ -356,8 +357,8 @@ do_configure_printer() {
 	log_action_end_msg $?
 	{
 		cp "$Dir"/printers.conf.O /etc/cups/printers.conf.O
-		echo " - Restauration du fichier printers.conf.O
-		"
+		echo " - Restauration du fichier printers.conf.O"
+		echo ""
 	} &>> "$Logfile"
 }
 
@@ -484,6 +485,7 @@ do_configure_scanner() {
 #################
 do_clean() {
 	echo -e "$Blue Configuration de votre imprimante Brother $Model_Name terminée. $Resetcolor"
+	echo "# Configuration imprimante terminée" &>> "$Logfile"
 	cd || exit
 	# On supprime le fichier printers.conf.O
 	if [[ -e "$Dir"/printers.conf.O ]]; then
