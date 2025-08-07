@@ -32,10 +32,7 @@ control_ip() {
 }
 
 install_pkg() {
-	read -ra tab <<< "$1 $2 $3 $4 $5 $6 $7 $8 $9"
-	#echo ${tab[@]}
-
-	for pkg in "${tab[@]}"; do
+	for pkg do
 		log_action_begin_msg "Recherche du paquet : ' $pkg ' sur votre système"
 		if dpkg-query -f '${binary:Package}\n' -W "$pkg" &>/dev/null; then
 			echo " - Paquet ' $pkg ' deja installé" &>> "$Logfile"
@@ -51,9 +48,7 @@ install_pkg() {
 }
 
 verif_rep() {
-	read -ra tab <<< "$1 $2 $3 $4 $5 $6 $7 $8 $9"
-
-	for dir in "${tab[@]}"; do
+	for dir do
 	log_action_begin_msg "Recherche du dossier ' $dir ' sur votre système"
 		if [[ -d "$dir" ]]; then log_action_end_msg 0;
 		else
@@ -107,7 +102,6 @@ Udev_Rules="/lib/udev/rules.d/60-libsane1.rules"
 Udev_Deb_Name="brother-udev-rule-type1-1.0.2-0.all.deb"
 Udev_Deb_Url="http://download.brother.com/welcome/dlf006654/$Udev_Deb_Name"
 Scankey_Drv_Deb_Name="brscan-skey-0.3.4-0.amd64.deb"
-Scankey_Drv_Deb_Url="https://download.brother.com/welcome/dlf006652/brscan-skey-0.3.4-0.amd64.deb"
 
 Blue="\\033[1;34m"
 Red="\\033[1;31m"
@@ -155,14 +149,19 @@ do_init_script() {
 	# On construit l'URL du fichier contenant les informations
 	Printer_Info="$Url_Inf/$Printer_Name"
 	# On vérifie l'URL
+	Printer_dl_url="https://support.brother.com/g/b/downloadtop.aspx?c=fr&lang=fr&prod=""$Printer_Name""_us_eu_as"
+
 	if ! wget -q --spider "$Printer_Info"; then
 		log_action_end_msg 1
 		echo " - Aucun pilote trouvé" &>> "$Logfile"
-		echo -e "$Red Aucun pilote trouvé. Veuillez vérifier le modèle de votre imprimante ou visitez la page suivante http://support.brother.com/g/b/productsearch.aspx?c=us&lang=en&content=dl afin de télécharger les pilotes et les installer manuellement. $Resetcolor"
+		echo -e "$Red Aucun pilote trouvé. Veuillez verifier votre connexion internet .
+		Veuillez vérifier le modèle de votre imprimante ou
+		visitez la page suivante : $Printer_dl_url
+		afin de télécharger les pilotes et les installer manuellement. $Resetcolor"
 		exit 1
 	fi
 	# On vérifie que le fichier fournit les informations
-	# ???????? pas compris a quoi sert ce controle , ni quelles info il est censé recuperé
+	# ???????? pas compris a quoi sert ce controle , ni quelles infos il est censé recuperé
 	Lnk=$(wget -q "$Printer_Info" -O - | grep LNK - | cut -d= -f2)
 	if [[ "$Lnk" ]]; then Printer_Info="$Url_Inf/$Lnk"; fi
 
@@ -175,6 +174,7 @@ do_init_script() {
 			# Repertoire courant : $Dir
 			# Repertoire de telechargement des pilotes : $Temp_Dir
 			# Fichier d'informations : $Printer_Info
+			# page de telechargement des pilotes : $Printer_dl_url
 			" &>> "$Logfile"
 }
 
@@ -233,18 +233,14 @@ do_download_drivers() {
 		echo "# Recherche des pilotes du scanner" &>> "$Logfile"
 		log_action_begin_msg "Recherche des pilotes pour le scanner"
 		Scankey_Deb=$(wget -q "$Printer_Info" -O - | grep SCANKEY_DRV - | cut -d= -f2)
-		Scanner_Info="$Url_Inf/$Scanner_Deb.lnk" &>> "$Logfile"
-		Scankey_Info="$Url_Inf/$Scankey_Deb.lnk" &>> "$Logfile"
+
+		Scanner_Info="$Url_Inf/$Scanner_Deb.lnk"
+		Scankey_Info="$Url_Inf/$Scankey_Deb.lnk"
+		echo "Scanner infos : $Scanner_Info , $Scankey_Info" &>> "$Logfile"
 
 		# On récupère les pilotes du scanner en fonctionnement de l'architecture du système (32-bits ou 64-bits)
 		case "$Arch" in
-			i386)
-				Scanner_Drv_Deb=$(wget -q "$Scanner_Info" -O - | grep DEB32 | cut -d= -f2)
-				Scankey_Drv_Deb=$(wget -q "$Scankey_Info" -O - | grep DEB32 | cut -d= -f2)
-				echo " - Architecture : $Arch" &>> "$Logfile"
-				log_action_end_msg 0
-			;;
-			i686)
+			i386|i686)
 				Scanner_Drv_Deb=$(wget -q "$Scanner_Info" -O - | grep DEB32 | cut -d= -f2)
 				Scankey_Drv_Deb=$(wget -q "$Scankey_Info" -O - | grep DEB32 | cut -d= -f2)
 				echo " - Architecture : $Arch" &>> "$Logfile"
@@ -253,6 +249,8 @@ do_download_drivers() {
 			x86_64)
 				Scanner_Drv_Deb=$(wget -q "$Scanner_Info" -O - | grep DEB64 | cut -d= -f2)
 				Scankey_Drv_Deb=$(wget -q "$Scankey_Info" -O - | grep DEB64 | cut -d= -f2)
+				# pour ubuntu 24.04 et superieurs
+				if [[ "$Scankey_Drv_Deb" == "brscan-skey-0.3.2-0.amd64.deb" ]]; then Scankey_Drv_Deb="brscan-skey-0.3.4-0.amd64.deb";fi
 				echo " - Architecture : $Arch" &>> "$Logfile"
 				log_action_end_msg 0
 			;;
@@ -276,10 +274,9 @@ do_download_drivers() {
 			if [[ ! -f "$Temp_Dir"/"$pkg" ]]; then
 				Url_Deb="$Url_Pkg"/"$pkg"
 				# le paquet 'udev-rules' et 'brscan-skey' sont situés a un autre emplacement
-				if [[ -n "$Scanner_Drv_Deb" ]]; then # on ne le telecharge qu ' en cas d ' install du scanner
-					if [[ "$pkg" == "$Udev_Deb_Name" ]]; then Url_Deb="$Udev_Deb_Url"; fi
-					if [[ "$pkg" == "$Scankey_Drv_Deb" ]] && [[ $Arch == "x86_64" ]]; then Url_Deb="$Scankey_Drv_Deb_Url"; pkg="$Scankey_Drv_Deb_Name"; fi
-				fi
+				 if [[ -n "$Scanner_Drv_Deb" ]]; then # on ne le telecharge qu ' en cas d ' install du scanner
+				 	if [[ "$pkg" == "$Udev_Deb_Name" ]]; then Url_Deb="$Udev_Deb_Url"; fi
+				 fi
 				echo " - Téléchargement du paquet : $pkg" &>> "$Logfile"
 				log_action_begin_msg "Téléchargement du paquet : $pkg"
 				wget -cP "$Temp_Dir" "$Url_Deb" &>> "$Logfile"
@@ -299,7 +296,7 @@ do_download_drivers() {
 do_install_drivers() {
 	echo -e "$Blue Installation des pilotes $Resetcolor"
 	echo "# Installation des pilotes" &>> "$Logfile"
-	for pkg in "$Printer_Lpd_Deb" "$Printer_Cups_Deb" "$Printer_Drv_Deb" "$Scanner_Drv_Deb" "$Scankey_Drv_Deb" "$Udev_Deb_Name" "$Scankey_Drv_Deb_Name"; do
+	for pkg in "$Printer_Lpd_Deb" "$Printer_Cups_Deb" "$Printer_Drv_Deb" "$Scanner_Drv_Deb" "$Udev_Deb_Name" "$Scankey_Drv_Deb_Name"; do
 		if [[ -n "$pkg" ]] && [[ -f "$Temp_Dir/$pkg" ]]; then
 			log_action_begin_msg "Installation du paquet : $pkg"
 			echo " - Installation par 'dpkg' du paquet : $pkg" &>> "$Logfile"
@@ -486,7 +483,7 @@ do_configure_scanner() {
 # FIN DU SCRIPT #
 #################
 do_clean() {
-	echo -e "$Blue Configuration de votre imprimante Brother $Model_Name terminée. $Resetcolor"
+	echo -e "$Blue Configuration de votre imprimante Brother $Model_Name terminée. Bye :D $Resetcolor"
 	echo "# Configuration imprimante terminée" &>> "$Logfile"
 	cd || exit
 	# On supprime le fichier printers.conf.O
