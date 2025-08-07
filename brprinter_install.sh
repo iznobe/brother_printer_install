@@ -1,5 +1,7 @@
 #!/bin/bash
 # Script d'installation pour imprimantes Brother
+# ecrit par @demonipuch .
+# re-ecrit par ubuntu team : https://forum.ubuntu-fr.org/viewtopic.php?id=2091835&p=2
 
 # todo :
 # verification de l' installation des dependances / paquets sur version ubuntu 24.04 et superieures
