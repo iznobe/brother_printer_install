@@ -1,7 +1,5 @@
 #!/bin/bash
 # Script d'installation pour imprimantes Brother
-# originally wrote by @demonipuch
-# rewrite the full script on ubuntu team : https://forum.ubuntu-fr.org/viewtopic.php?id=2091835&p=2
 
 # todo :
 # verification de l' installation des dependances / paquets sur version ubuntu 24.04 et superieures
@@ -17,7 +15,7 @@ valid_ip() {
 control_ip() {
 	if [[ -n "$IP" ]]; then
 		if ( (valid_ip "$IP") ); then
-			if ping -c2 "$IP"; then echo "# Adresse IP : $IP" &>> "$Logfile"; log_action_end_msg 0
+			if ping -c2 "$IP"; then log_action_end_msg 0
 			else
 				log_action_begin_msg "Votre IP ne permet pas de joindre l ' hote. Eclairer votre imprimante si celle-ci est eteinte , ou bien , corriger votre adresse IP."
 				unset IP
@@ -95,7 +93,7 @@ Temp_Dir="/tmp/packages"
 Codename="$(lsb_release -cs)"
 Arch="$(uname -m)"
 date=$(date +%F_%T)
-Logfile="/home/$User/brprinter-install.log"
+Logfile="/home/$User/brprinter-installer.log"
 #Logfile="/home/$User/brprinter-installer.$date.log"
 Lib_Dir="/usr/lib/$Arch-linux-gnu"
 Url_Inf="http://www.brother.com/pub/bsc/linux/infs"
@@ -106,6 +104,7 @@ Url_Pkg="http://www.brother.com/pub/bsc/linux/packages"
 Udev_Rules="/lib/udev/rules.d/60-libsane1.rules"
 Udev_Deb="brother-udev-rule-type1-1.0.2-0.all.deb"
 Udev_Deb_Url="http://download.brother.com/welcome/dlf006654/$Udev_Deb"
+Scankey_Drv_Deb_Url="https://download.brother.com/welcome/dlf006652/brscan-skey-0.3.4-0.amd64.deb"
 
 Blue="\\033[1;34m"
 Red="\\033[1;31m"
@@ -169,6 +168,7 @@ do_init_script() {
 			# Architecture : $Arch
 			# Modèle de l'imprimante : $Model_Name
 			# Type de connexion : $Connection
+			# Adresse IP : $IP
 			# Repertoire courant : $Dir
 			# Repertoire de telechargement des pilotes : $Temp_Dir
 			# Fichier d'informations : $Printer_Info
@@ -214,40 +214,57 @@ do_check_prerequisites() {
 # TÉLÉCHARGEMENT DES PILOTES #
 ##############################
 do_download_drivers() {
-	echo -e "$Blue Téléchargement des pilotes de l'imprimante $Resetcolor"
-	echo "# Téléchargement des pilotes de l'imprimante" &>> "$Logfile"
 	# On crée le dossier de téléchargement des paquets si il n' existe pas deja
-	if [[ ! -d "$Temp_Dir" ]]; then
-		mkdir "$Temp_Dir"
-	fi
-	log_action_begin_msg "Recherche des pilotes"
-	# On récupère le nom des paquets disponibles
+	verif_rep "$Temp_Dir"
+
+	echo -e "$Blue Recherche des pilotes $Resetcolor"
+	echo "# Recherche des pilotes de l'imprimante" &>> "$Logfile"
+	log_action_begin_msg "Recherche des pilotes pour l' imprimante"
 	Printer_Lpd_Deb=$(wget -q "$Printer_Info" -O - | grep PRN_LPD_DEB - | cut -d= -f2)
 	Printer_Cups_Deb=$(wget -q "$Printer_Info" -O - | grep PRN_CUP_DEB - | cut -d= -f2)
 	Printer_Drv_Deb=$(wget -q "$Printer_Info" -O - | grep PRN_DRV_DEB - | cut -d= -f2)
+	log_action_end_msg 0
+
 	Scanner_Deb=$(wget -q "$Printer_Info" -O - | grep SCANNER_DRV - | cut -d= -f2)
-	Scankey_Deb=$(wget -q "$Printer_Info" -O - | grep SCANKEY_DRV - | cut -d= -f2)
+	if [[ -n "$Scanner_Deb" ]]; then
+		echo "# Recherche des pilotes du scanner" &>> "$Logfile"
+		log_action_begin_msg "Recherche des pilotes pour le scanner"
+		Scankey_Deb=$(wget -q "$Printer_Info" -O - | grep SCANKEY_DRV - | cut -d= -f2)
+		Scanner_Info="$Url_Inf/$Scanner_Deb.lnk"
+		Scankey_Info="$Url_Inf/$Scankey_Deb.lnk"
 
-	Scanner_Info="$Url_Inf/$Scanner_Deb.lnk"
-	Scankey_Info="$Url_Inf/$Scankey_Deb.lnk"
+		# On récupère les pilotes du scanner en fonctionnement de l'architecture du système (32-bits ou 64-bits)
+		case "$Arch" in
+			i386)
+				Scanner_Drv_Deb=$(wget -q "$Scanner_Info" -O - | grep DEB32 | cut -d= -f2)
+				Scankey_Drv_Deb=$(wget -q "$Scankey_Info" -O - | grep DEB32 | cut -d= -f2)
+				echo " - Architecture : $Arch" &>> "$Logfile"
+				log_action_end_msg 0
+			;;
+			i686)
+				Scanner_Drv_Deb=$(wget -q "$Scanner_Info" -O - | grep DEB32 | cut -d= -f2)
+				Scankey_Drv_Deb=$(wget -q "$Scankey_Info" -O - | grep DEB32 | cut -d= -f2)
+				echo " - Architecture : $Arch" &>> "$Logfile"
+				log_action_end_msg 0
+			;;
+			x86_64)
+				Scanner_Drv_Deb=$(wget -q "$Scanner_Info" -O - | grep DEB64 | cut -d= -f2)
+				Scankey_Drv_Deb=$(wget -q "$Scankey_Info" -O - | grep DEB64 | cut -d= -f2)
+				echo " - Architecture : $Arch" &>> "$Logfile"
+				log_action_end_msg 0
+			;;
+			*)
+				echo "Architecture inconnue: $Arch" &>> "$Logfile"
+				log_action_end_msg 1
+			;;
+		esac
+	else
+		echo "$Red Pas de scanner détecté $Resetcolor"
+		echo " - Pas de scanner détecté" &>> "$Logfile"
+		log_action_end_msg 1
+	fi
 
-	# On récupère les pilotes du scanner en fonctionnement de l'architecture du système (32-bits ou 64-bits)
-	case "$Arch" in
-		i*86)
-			Scanner_Drv_Deb=$(wget -q "$Scanner_Info" -O - | grep DEB32 | cut -d= -f2)
-			Scankey_Drv_Deb=$(wget -q "$Scankey_Info" -O - | grep DEB32 | cut -d= -f2)
-			echo "Architecture : $Arch" &>> "$Logfile"
-		;;
-		x86_64)
-			Scanner_Drv_Deb=$(wget -q "$Scanner_Info" -O - | grep DEB64 | cut -d= -f2)
-			Scankey_Drv_Deb=$(wget -q "$Scankey_Info" -O - | grep DEB64 | cut -d= -f2)
-			echo "Architecture : $Arch" &>> "$Logfile"
-		;;
-		*)
-			echo "Architecture inconnue: $Arch" &>> "$Logfile"
-		;;
-	esac
-
+	echo -e "$Blue Téléchargement des pilotes $Resetcolor"
 	for pkg in "$Printer_Lpd_Deb" "$Printer_Cups_Deb" "$Printer_Drv_Deb" "$Scanner_Drv_Deb" "$Scankey_Drv_Deb" "$Udev_Deb"; do
 		# On ajoute la liste des pilotes trouvés au fichier de journalisation
 		if [[ -n "$pkg" ]]; then
@@ -255,9 +272,10 @@ do_download_drivers() {
 			# On télécharge les pilotes trouvés si ils ne le sont pas deja
 			if [[ ! -f "$Temp_Dir"/"$pkg" ]]; then
 				Url_Deb="$Url_Pkg"/"$pkg"
-				# le paquet udev-rules est situé a un autre emplacement
+				# le paquet 'udev-rules' et 'brscan-skey' sont situés a un autre emplacement
 				if [[ -n "$Scanner_Drv_Deb" ]]; then # on ne le telecharge qu ' en cas d ' install du scanner
 					if [[ "$pkg" == "$Udev_Deb" ]]; then Url_Deb="$Udev_Deb_Url"; fi
+					if [[ "$pkg" == "$Scankey_Drv_Deb" ]] && [[ $Arch == "x86_64" ]]; then Url_Deb="$Scankey_Drv_Deb_Url"; fi
 				fi
 				echo " - Téléchargement du paquet : $pkg" &>> "$Logfile"
 				log_action_begin_msg "Téléchargement du paquet : $pkg"
@@ -296,7 +314,6 @@ do_configure_printer() {
 	echo " " &>> "$Logfile"
 	echo -e "$Blue Configuration de l'imprimante $Resetcolor"
 	echo "# Configuration de l'imprimante" &>> "$Logfile"
-	# On recherche un fichier ppd
 	log_action_begin_msg "Recherche d'un fichier PPD sur votre système"
 	echo " - Recherche d'un fichier PPD" &>> "$Logfile"
 	for pkg in "$Printer_Cups_Deb" "$Printer_Drv_Deb"; do
@@ -306,8 +323,7 @@ do_configure_printer() {
 	done
 	if [[ -z "$Ppd_File" ]]; then
 		for file in $(find /usr/share/cups/model -type f); do
-			if [[ $(grep -i Brother "$file" | grep -E "$Model_Name"|"$Printer_Name") ]]; then
-				Ppd_File="$file"
+			if [[ $(grep -i Brother "$file" | grep -E "$Model_Name"|"$Printer_Name") ]]; then Ppd_File="$file"
 			else
 				echo " - Fichier PPD : $Ppd_File non trouvé !" &>> "$Logfile"
 				log_action_end_msg 1
@@ -319,12 +335,12 @@ do_configure_printer() {
 	# On ajoute une nouvelle imprimante
 	log_action_begin_msg "Ajout de l'imprimante $Model_Name"
 	{
-		echo " - Ajout de l'imprimante $Model_Name"
-		echo " - Backup du fichier /etc/cups/printers.conf.O"
+		echo " - Ajout de l'imprimante $Model_Name
+		 - Backup du fichier /etc/cups/printers.conf.O"
 		cp /etc/cups/printers.conf.O "$Dir"
-		echo " - Arret du service CUPS"
+		echo " - Arret du service CUPS
+		 - Restauration du fichier printers.conf"
 		systemctl stop cups
-		echo " - Restauration du fichier printers.conf"
 		cp "$Dir"/printers.conf.O /etc/cups/printers.conf
 		echo " - Redémarrage du service CUPS"
 		systemctl restart cups
@@ -338,12 +354,10 @@ do_configure_printer() {
 	;;
 	esac
 	log_action_end_msg $?
-
-	log_action_begin_msg " - Restauration du fichier printers.conf.O"
 	{
-		echo " - Restauration du fichier printers.conf.O"
 		cp "$Dir"/printers.conf.O /etc/cups/printers.conf.O
-		echo ""
+		echo " - Restauration du fichier printers.conf.O
+		"
 	} &>> "$Logfile"
 }
 
@@ -469,6 +483,7 @@ do_configure_scanner() {
 # FIN DU SCRIPT #
 #################
 do_clean() {
+	echo -e "$Blue Configuration de votre imprimante Brother $Model_Name terminée. $Resetcolor"
 	cd || exit
 	# On supprime le fichier printers.conf.O
 	if [[ -e "$Dir"/printers.conf.O ]]; then
@@ -486,4 +501,3 @@ do_install_drivers
 do_configure_printer
 do_configure_scanner
 do_clean
-
