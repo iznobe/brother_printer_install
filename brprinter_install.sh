@@ -274,19 +274,12 @@ do_download_drivers() {
                     [scanKey_drv]="$(grep DEB64 "$Scankey_Info" | cut -d= -f2)"
                 )
                 # pour ubuntu 24.04 et superieurs
-                if test "${printer[scanKey_drv]}" = "brscan-skey-0.3.2-0.amd64.deb"; then printer[scanKey_drv]="$Scankey_Drv_Deb_Name";fi
+                if [[ $(grep DISTRIB_RELEASE= /etc/lsb*release | cut -d= -f2 | cut -c1-2) -ge 24 ]]; then
+                	if test "${printer[scanKey_drv]}" = "brscan-skey-0.3.2-0.amd64.deb"; then printer[scanKey_drv]="$Scankey_Drv_Deb_Name";fi
+                fi
                 log_action_end_msg 0
                 ;;
-            *)
-				Arch="inconnue"
-                ;;
         esac
- #       if test $Arch=="inconnue"; then
-#			echo " - Architecture : $Arch" &>> "$Logfile"
-#			echo -e "$Red Achitecture $Arch non prise en charge ! script interrompu. $Resetcolor"
-#			log_action_end_msg 1
-#			exit 2
-#		fi
     else
         echo "$Red Pas de scanner détecté $Resetcolor"
         echo " - Pas de scanner détecté" &>> "$Logfile"
