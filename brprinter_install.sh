@@ -7,7 +7,7 @@
 # verification de l' installation des dependances / paquets sur version ubuntu 24.04 et superieures
 # multiarch-support , libsane etc ...
 
-. /lib/lsb/init-functions
+if test -f /lib/lsb/init-functions; then . /lib/lsb/init-functions;fi
 
 valid_ip() {
     IFS='.' read -ra ip <<< "$1"
