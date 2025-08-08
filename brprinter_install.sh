@@ -308,6 +308,7 @@ do_download_drivers() {
     done
     echo " " &>> "$Logfile"
 }
+
 ############################
 # INSTALLATION DES PILOTES #
 ############################
@@ -509,6 +510,7 @@ do_clean() {
 	chown -R "$User": "$Temp_Dir" "$Logfile"
 	echo -e "$Blue Configuration de votre imprimante Brother $Model_Name terminée. Bye :D $Resetcolor"
 	echo "# Configuration imprimante terminée" &>> "$Logfile"
+	echo -e " Vous pouvez supprimer le dossier $Temp_Dir avec la commande suivante :  rm -r $Temp_Dir"
 	exit 0
 }
 
