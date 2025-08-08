@@ -63,9 +63,6 @@ verif_rep() {
 verif_lien() { # utilisation : # verif_lien "lien" "cible" . affichage de ls -l ' lien : /etc/init.d/lpd ~> /etc/init.d/cups : cible '
 	# Musique -> /datas/iznobe/Musique
 	# lien -> cible
-
-	# ln -s /datas/$USER/{Bureau,Documents,Images,Scripts,Ressources,Photos,Musique,Téléchargements,Vidéos_famille}  /home/$USER/
-	# ln -s cible    lien
 	lien=$1
 	cible=$2
 
@@ -94,8 +91,8 @@ Logfile="/home/$User/brprinter-installer.log"
 Lib_Dir="/usr/lib/$Arch-linux-gnu"
 Url_Info="http://www.brother.com/pub/bsc/linux/infs"
 # Packages :
-# https://download.brother.com/pub/com/linux/linux/packages/
-Url_Pkg="http://www.brother.com/pub/bsc/linux/packages"
+Url_Pkg="https://download.brother.com/pub/com/linux/linux/packages/"
+Url_Pkg2="http://www.brother.com/pub/bsc/linux/packages"
 
 Udev_Rules="/lib/udev/rules.d/60-libsane1.rules"
 Udev_Deb_Name="brother-udev-rule-type1-1.0.2-0.all.deb"
@@ -115,7 +112,7 @@ do_init_script() {
 	# On vérifie qu'on lance le script en root
 	if ((EUID)); then
 		echo -e "$Red Vous devez lancer ce script en tant que root : sudo bash $0 $Resetcolor"; exit 0;fi
-	if [[ $Arch != "i386" ]] && [[ $Arch != "i686" ]] && [[ $Arch != "x86_64" ]] ; then
+	if [[ $Arch != "i386" ]] && [[ $Arch != "i686" ]] && [[ $Arch != "x86_64" ]]; then #  && [[ $Arch != "armv7l" ]]
 		echo " - Architecture : $Arch" &>> "$Logfile"
 		echo -e "$Red Achitecture $Arch non prise en charge ! script interrompu. $Resetcolor"
 		log_action_end_msg 1
@@ -258,6 +255,7 @@ do_download_drivers() {
         wget -q "$Scanner_Url_Info" -O "$Scanner_Info"
         Scankey_Info="$Temp_Dir/Scankey_Url_Info.html"
 		wget -q "$Scankey_Url_Info" -O "$Scankey_Info"
+		log_action_end_msg $?
 
         # On récupère les pilotes du scanner en fonctionnement de l'architecture du système (32-bits ou 64-bits)
         case "$Arch" in
@@ -279,6 +277,9 @@ do_download_drivers() {
                 fi
                 log_action_end_msg 0
                 ;;
+                *)
+					echo "Architecture inconnue: $Arch" &>> "$Logfile"
+				;;
         esac
     else
         echo "$Red Pas de scanner détecté $Resetcolor"
@@ -299,6 +300,10 @@ do_download_drivers() {
                 echo " - Téléchargement du paquet : $pkg" &>> "$Logfile"
                 log_action_begin_msg "Téléchargement du paquet : $pkg"
                 wget -cP "$Temp_Dir" "$Url_Deb" &>> "$Logfile"
+                if [[ ! -f "$Temp_Dir"/"$pkg" ]]; then
+                  Url_Deb2="$Url_Pkg2"/"$pkg"
+                  wget -cP "$Temp_Dir" "$Url_Deb2" &>> "$Logfile"
+                fi
                 log_action_end_msg $?
             else
                 log_action_begin_msg "Le paquet : $pkg a deja été telechargé"
@@ -518,6 +523,6 @@ do_init_script
 do_check_prerequisites
 do_download_drivers
 do_install_drivers
-do_configure_printer
+do_configureprinter
 do_configure_scanner
 do_clean
