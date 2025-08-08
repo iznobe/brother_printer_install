@@ -212,7 +212,7 @@ do_check_prerequisites() {
 			fi
 		fi
 	done
-	echo " " &>> "$Logfile"
+	echo "" &>> "$Logfile"
 }
 
 ##############################
@@ -311,7 +311,7 @@ do_download_drivers() {
             fi
         fi
     done
-    echo " " &>> "$Logfile"
+    echo "" &>> "$Logfile"
 }
 
 ############################
@@ -328,7 +328,7 @@ do_install_drivers() {
 			log_action_end_msg $?
 		fi
 	done
-	echo " " &>> "$Logfile"
+	echo "" &>> "$Logfile"
 }
 
 #################################
@@ -503,7 +503,7 @@ do_configure_scanner() {
 			fi
 		fi
 	fi
-	echo " " &>> "$Logfile"
+	echo "" &>> "$Logfile"
 }
 
 #################
@@ -512,10 +512,10 @@ do_configure_scanner() {
 do_clean() {
 	cd || exit
 	# On réattribue les droits des dossiers/fichiers crées à l'utilisateur
-	chown -R "$User": "$Temp_Dir" "$Logfile"
-	echo -e "$Blue Configuration de votre imprimante Brother $Model_Name terminée. Bye :D $Resetcolor"
-	echo "# Configuration imprimante terminée" &>> "$Logfile"
-	echo -e " Vous pouvez supprimer le dossier $Temp_Dir avec la commande suivante :  rm -r $Temp_Dir"
+	chown -Rv "$User": "$Temp_Dir" "$Logfile"
+	echo -e "$Blue Configuration de votre imprimante Brother $Model_Name terminée. Bye :D $Resetcolor
+  Vous pouvez supprimer le dossier $Temp_Dir avec la commande suivante :  rm -r $Temp_Dir"
+  echo "# Configuration imprimante terminée" &>> "$Logfile"
 	exit 0
 }
 
@@ -523,6 +523,6 @@ do_init_script
 do_check_prerequisites
 do_download_drivers
 do_install_drivers
-do_configureprinter
+do_configure printer
 do_configure_scanner
 do_clean
