@@ -19,12 +19,12 @@ control_ip() {
 		if ( (valid_ip "$IP") ); then
 			if ping -c2 "$IP"; then log_action_end_msg 0
 			else
-				log_action_begin_msg "Votre IP ne permet pas de joindre l ' hote. Eclairer votre imprimante si celle-ci est eteinte , ou bien , corriger votre adresse IP."
+				log "Votre IP ne permet pas de joindre l ' hote. Eclairer votre imprimante si celle-ci est eteinte , ou bien , corriger votre adresse IP."
 				unset IP
 				log_action_end_msg 1
 			fi
 		else
-			log_action_begin_msg "L ' adresse IP que vous avez entrée est incorrecte"
+			log "L ' adresse IP que vous avez entrée est incorrecte"
 			unset IP
 			log_action_end_msg 1
 		fi
@@ -33,14 +33,14 @@ control_ip() {
 
 install_pkg() {
 	for pkg do
-		log_action_begin_msg "Recherche du paquet : ' $pkg ' sur votre système"
+		log "Recherche du paquet : ' $pkg ' sur votre système"
 		if dpkg-query -f '${binary:Package}\n' -W "$pkg" &>/dev/null; then
 			echo " - Paquet ' $pkg ' deja installé" &>> "$Logfile"
 			log_action_end_msg 0
 		else
 			echo " - Paquet ' $pkg ' non installé" &>> "$Logfile"
 			log_action_end_msg 1
-			log_action_begin_msg "Installation du paquet : ' $pkg ' sur votre système"
+			log "Installation du paquet : ' $pkg ' sur votre système"
 			apt-get install -qq "$pkg" &>> "$Logfile"
 			log_action_end_msg $?
 		fi
@@ -49,11 +49,11 @@ install_pkg() {
 
 verif_rep() {
 	for dir do
-	log_action_begin_msg "Recherche du dossier ' $dir ' sur votre système"
+	log "Recherche du dossier ' $dir ' sur votre système"
 		if [[ -d "$dir" ]]; then log_action_end_msg 0;
 		else
 			log_action_end_msg 1
-			log_action_begin_msg "Creation du dossier ' $dir '"
+			log "Creation du dossier ' $dir '"
 			mkdir -pv "$dir" &>> "$Logfile"
 			log_action_end_msg $?
 		fi
@@ -66,13 +66,27 @@ verif_lien() { # utilisation : # verif_lien "lien" "cible" . affichage de ls -l 
 	lien=$1
 	cible=$2
 
-	log_action_begin_msg "Recherche du lien ' $lien ' sur votre système"
+	log "Recherche du lien ' $lien ' sur votre système"
 	if ! test -L "$lien"; then
 		log_action_end_msg 1
-		log_action_begin_msg "Creation du lien ' $lien '"
+		log "Creation du lien ' $lien '"
 		ln -s "$cible" "$lien" &>> "$Logfile"
 		log_action_end_msg $?
 	else log_action_end_msg $?;
+	fi
+}
+
+log() {
+	message="$1"
+	if test -z "$2"; then
+		log_action_begin_msg "$message"
+		echo -e " - $message" &>> "$Logfile"
+	else
+		if test "$2" == "Blue"; then color="\\033[1;34m";fi
+		if test "$2" == "Red"; then color="\\033[1;31m";fi
+			echo -e "$color $message \\033[0;0m" # Resetcolor
+			echo -e "
+			# $message" &>> "$Logfile"
 	fi
 }
 
@@ -86,8 +100,8 @@ Temp_Dir="/tmp/packages"
 Codename="$(lsb_release -cs)"
 Arch="$(uname -m)"
 date=$(date +%F_%T)
-Logfile="/home/$User/brprinter-installer.log"
-#Logfile="/home/$User/brprinter-installer.$date.log"
+Logfile="/home/$User/brprinter_install.log"
+#Logfile="/home/$User/brprinter_install.$date.log"
 Lib_Dir="/usr/lib/$Arch-linux-gnu"
 Url_Info="http://www.brother.com/pub/bsc/linux/infs"
 # Packages :
@@ -99,10 +113,6 @@ Udev_Deb_Name="brother-udev-rule-type1-1.0.2-0.all.deb"
 Udev_Deb_Url="http://download.brother.com/welcome/dlf006654/"
 Scankey_Drv_Deb_Name="brscan-skey-0.3.4-0.amd64.deb"
 
-Blue="\\033[1;34m"
-Red="\\033[1;31m"
-Resetcolor="\\033[0;0m"
-
 declare -A printer
 
 #########################
@@ -110,17 +120,14 @@ declare -A printer
 #########################
 do_init_script() {
 	# On vérifie qu'on lance le script en root
-	if ((EUID)); then
-		echo -e "$Red Vous devez lancer ce script en tant que root : sudo bash $0 $Resetcolor"; exit 0;fi
+	if ((EUID)); then log "Vous devez lancer ce script en tant que root : sudo bash $0" "Red"; exit 0;fi
+	if [[ -f $Logfile ]]; then mv "$Logfile" "$Logfile".old; fi
 	if [[ $Arch != "i386" ]] && [[ $Arch != "i686" ]] && [[ $Arch != "x86_64" ]]; then #  && [[ $Arch != "armv7l" ]]
-		echo " - Architecture : $Arch" &>> "$Logfile"
-		echo -e "$Red Achitecture $Arch non prise en charge ! script interrompu. $Resetcolor"
-		log_action_end_msg 1
+		log "Achitecture $Arch non prise en charge ! script interrompu." "Red"
 		exit 1
 	fi
-	# Si un log existe déjà on le renomme
-	if [[ -f $Logfile ]]; then mv "$Logfile" "$Logfile".old; fi
 
+	# traitement des parametres passés au script
 	# Si le premier argument est vide on demande le modèle de l'imprimante
 	while [[ -z "$Model_Name" ]]; do read -rp "Entrez votre modèle d' imprimante : " Model_Name;done
 	Model_Name=${Model_Name^^}
@@ -133,41 +140,20 @@ do_init_script() {
 			;;
 			1)
 				Connection="Réseau"
-				echo -e "$Red Vous devez d' abord vous assurer que votre imprimante possède une adresse IP fixe. $Resetcolor"
-				echo -e "$Red Veuillez consulter le manuel de votre imprimante pour plus de détails : http://support.brother.com/g/b/productsearch.aspx?c=fr&lang=fr&content=ml $Resetcolor"
+				log "Vous devez d' abord vous assurer que votre imprimante possède une adresse IP fixe." "Red"
+				log "Veuillez consulter le manuel de votre imprimante pour plus de détails : http://support.brother.com/g/b/productsearch.aspx?c=fr&lang=fr&content=ml" "Red"
 			;;
 		esac
 	done
-
-	# Si le 3eme argument est vide on demande l' IP de l'imprimante
+	# Si le 2eme argument est reseau on demande l' IP de l'imprimante
 	if [[ "$Connection" == "Réseau" ]]; then control_ip "$IP";
 		while [[ -z "$IP" ]]; do
 			read -rp "Entrez l'adresse IP de votre imprimante : " IP
 			control_ip "$IP"
 	    done
 	fi
-	# On transforme le nom de l'imprimante ( enleve le " - " )
-	Printer_Name="${Model_Name//-/}"
-	# On construit l'URL du fichier contenant les informations
-	Printer_Url_Info="$Url_Info/$Printer_Name"
-	# On vérifie l'URL
-	Printer_dl_url="https://support.brother.com/g/b/downloadtop.aspx?c=fr&lang=fr&prod=""$Printer_Name""_us_eu_as"
-
-	if ! wget -q --spider "$Printer_Url_Info"; then
-		log_action_end_msg 1
-		echo " - Aucun pilote trouvé" &>> "$Logfile"
-		echo -e "$Red Aucun pilote trouvé. Veuillez verifier votre connexion internet .
-		Veuillez vérifier le modèle de votre imprimante ou
-		visitez la page suivante : $Printer_dl_url
-		afin de télécharger les pilotes et les installer manuellement. $Resetcolor"
-		exit 2
-	fi
-	# On vérifie que le fichier fournit les informations
-	# ???????? pas compris a quoi sert ce controle , ni quelles infos il est censé recuperé
-	Lnk=$(wget -q "$Printer_Url_Info" -O - | grep LNK - | cut -d= -f2)
-	if [[ "$Lnk" ]]; then Printer_Url_Info="$Url_Info/$Lnk"; fi
-
-	echo "                              $date
+	# resumé pour logfile
+	log "                     $date
 			# Ubuntu Codename : $Codename
 			# Architecture : $Arch
 			# Modèle de l'imprimante : $Model_Name
@@ -176,17 +162,35 @@ do_init_script() {
 			# Repertoire courant : $Temp_Dir
 			# Repertoire de telechargement des pilotes : $Temp_Dir
 			# Fichier d'informations : $Printer_Url_Info
-			# page de telechargement des pilotes : $Printer_dl_url
-			" &>> "$Logfile"
+			# page de telechargement des pilotes : $Printer_dl_url" "Blue"
+
+	# On transforme le nom de l'imprimante ( enleve le " - " )
+	Printer_Name="${Model_Name//-/}"
+	# On construit l'URL du fichier contenant les informations
+	Printer_Url_Info="$Url_Info/$Printer_Name"
+	Printer_dl_url="https://support.brother.com/g/b/downloadtop.aspx?c=fr&lang=fr&prod=""$Printer_Name""_us_eu_as"
+	# On vérifie l'URL
+	log "Obtention des infos de l ' imprimante"
+	if ! wget -q --spider "$Printer_Url_Info"; then
+		log_action_end_msg 1
+		log "Aucun pilote trouvé. Veuillez verifier votre connexion internet .
+		Veuillez vérifier le modèle de votre imprimante ou
+		visitez la page suivante : $Printer_dl_url
+		afin de télécharger les pilotes et les installer manuellement." "Red"
+		exit 2
+	fi
+	# On vérifie que le fichier fournit les informations
+	# ???????? pas compris a quoi sert ce controle , ni quelles infos il est censé recuperé . peut etre certaines URL comporte des liens vers d' autres pages
+	Lnk=$(wget -q "$Printer_Url_Info" -O - | grep LNK - | cut -d= -f2)
+	if [[ "$Lnk" ]]; then Printer_Url_Info="$Url_Info/$Lnk"; fi
 }
 
 ###############################
 # VERIFICATION DES PRÉ-REQUIS #
 ###############################
 do_check_prerequisites() {
-	echo -e "$Blue Vérification des pré-requis $Resetcolor"
-	echo "# Vérification des pré-requis" &>> "$Logfile"
-	log_action_begin_msg "Mise à jour de la liste des paquets"
+	log "Vérification des pré-requis" "Blue"
+	log "Mise à jour de la liste des paquets"
 	apt-get update -qq
 	log_action_end_msg $?
 	# On vérifie que la liste des paquets est installée et on l'installe le cas échéant
@@ -199,8 +203,8 @@ do_check_prerequisites() {
 	for i in DCP-110C DCP-115C DCP-117C DCP-120C DCP-310CN DCP-315CN DCP-340CW FAX-1815C FAX-1820C FAX-1835C FAX-1840C FAX-1920CN FAX-1940CN FAX-2440C MFC-210C MFC-215C MFC-3220C MFC-3240C MFC-3320CN MFC-3340CN MFC-3420C MFC-3820CN MFC-410CN MFC-420CN MFC-425CN MFC-5440CN MFC-5840CN MFC-620CN MFC-640CW MFC-820CW; do
 		if [[ "$Model_Name" == "$i" ]]; then install_pkg "csh";	fi
 	done
-	# On vérifie que le dossier /usr/share/cups/model et /var/spool/lpd existent et on les crée le cas échéant
-	verif_rep "/usr/share/cups/model" "/var/spool/lpd"
+	# On vérifie que le dossier de téléchargement temporaire et /usr/share/cups/model et /var/spool/lpd existent et on les crée le cas échéant
+	verif_rep "/usr/share/cups/model" "/var/spool/lpd" "$Temp_Dir"
 
 	# On vérifie que le lien symbolique /etc/init.d/lpd existe et on le crée le cas échéant (uniquement pour certaines imprimantes)
 	for i in DCP-1000 DCP-1400 DCP-8020 DCP-8025D DCP-8040 DCP-8045D DCP-8060 DCP-8065DN FAX-2850 FAX-2900 FAX-3800 FAX-4100 FAX-4750e FAX-5750e HL-1030 HL-1230 HL-1240 HL-1250 HL-1270N HL-1430 HL-1440 HL-1450 HL-1470N HL-1650 HL-1670N HL-1850 HL-1870N HL-5030 HL-5040 HL-5050 HL-5070N HL-5130 HL-5140 HL-5150D HL-5170DN HL-5240 HL-5250DN HL-5270DN HL-5280DW HL-6050 HL-6050D MFC-4800 MFC-6800 MFC-8420 MFC-8440 MFC-8460N MFC-8500 MFC-8660DN MFC-8820D MFC-8840D MFC-8860DN MFC-8870DW MFC-9030 MFC-9070 MFC-9160 MFC-9180 MFC-9420CN MFC-9660 MFC-9700 MFC-9760 MFC-9800 MFC-9860 MFC-9880; do
@@ -219,12 +223,8 @@ do_check_prerequisites() {
 # TÉLÉCHARGEMENT DES PILOTES #
 ##############################
 do_download_drivers() {
-    # On crée le dossier de téléchargement des paquets si il n' existe pas deja
-    verif_rep "$Temp_Dir"
-
-    echo -e "$Blue Recherche des pilotes $Resetcolor"
-    echo "# Recherche des pilotes de l'imprimante" &>> "$Logfile"
-    log_action_begin_msg "Recherche des pilotes pour l' imprimante"
+    log "Recherche des pilotes" "Blue"
+    log "Recherche des pilotes pour l' imprimante"
 
     Printer_Info="$Temp_Dir/Printer_Info.html"
     wget -q "$Printer_Url_Info" -O "$Printer_Info"
@@ -233,15 +233,14 @@ do_download_drivers() {
         [prn_cups]="$(grep PRN_CUP_DEB "$Printer_Info" | cut -d= -f2)"
         [prn_drv]="$(grep PRN_DRV_DEB "$Printer_Info"  | cut -d= -f2)"
     )
-    log_action_end_msg 0
+    log_action_end_msg $?
 
     Scanner_Deb=$(grep SCANNER_DRV "$Printer_Info" | cut -d= -f2)
     if test -n "$Scanner_Deb"; then
     	printer+=(
     		[udev_rules]="$Udev_Deb_Name"
     	)
-        echo "# Recherche des pilotes du scanner" &>> "$Logfile"
-        log_action_begin_msg "Recherche des pilotes pour le scanner"
+        log "Recherche des pilotes pour le scanner"
 
         Scankey_Deb=$(grep SCANKEY_DRV "$Printer_Info" | cut -d= -f2)
 
@@ -255,7 +254,6 @@ do_download_drivers() {
         wget -q "$Scanner_Url_Info" -O "$Scanner_Info"
         Scankey_Info="$Temp_Dir/Scankey_Url_Info.html"
 		wget -q "$Scankey_Url_Info" -O "$Scankey_Info"
-		log_action_end_msg $?
 
         # On récupère les pilotes du scanner en fonctionnement de l'architecture du système (32-bits ou 64-bits)
         case "$Arch" in
@@ -278,16 +276,15 @@ do_download_drivers() {
                 log_action_end_msg 0
                 ;;
                 *)
-					echo "Architecture inconnue: $Arch" &>> "$Logfile"
+					log "Architecture inconnue: $Arch" "Red"
 				;;
         esac
     else
-        echo "$Red Pas de scanner détecté $Resetcolor"
-        echo " - Pas de scanner détecté" &>> "$Logfile"
+        log "Pas de scanner détecté" "Red"
         log_action_end_msg 1
     fi
 
-    echo -e "$Blue Téléchargement des pilotes $Resetcolor"
+    log "Téléchargement des pilotes" "Blue"
     for pkg in "${printer[@]}"; do
         # On ajoute la liste des pilotes trouvés au fichier de journalisation
         if test -n "$pkg"; then
@@ -297,8 +294,7 @@ do_download_drivers() {
                 Url_Deb="$Url_Pkg"/"$pkg"
                 # le paquet 'udev-rules' est situé a un autre emplacement
                 if test "$pkg" == "${printer[udev_rules]}"; then Url_Deb="$Udev_Deb_Url"/"$pkg"; fi
-                echo " - Téléchargement du paquet : $pkg" &>> "$Logfile"
-                log_action_begin_msg "Téléchargement du paquet : $pkg"
+                log "Téléchargement du paquet : $pkg"
                 wget -cP "$Temp_Dir" "$Url_Deb" &>> "$Logfile"
                 if [[ ! -f "$Temp_Dir"/"$pkg" ]]; then
                   Url_Deb2="$Url_Pkg2"/"$pkg"
@@ -306,24 +302,21 @@ do_download_drivers() {
                 fi
                 log_action_end_msg $?
             else
-                log_action_begin_msg "Le paquet : $pkg a deja été telechargé"
+                log "Le paquet : $pkg a deja été telechargé"
                 log_action_end_msg 0
             fi
         fi
     done
-    echo "" &>> "$Logfile"
 }
 
 ############################
 # INSTALLATION DES PILOTES #
 ############################
 do_install_drivers() {
-	echo -e "$Blue Installation des pilotes $Resetcolor"
-	echo "# Installation des pilotes" &>> "$Logfile"
+	log "Installation des pilotes" "Blue"
 	for pkg in "${printer[@]}"; do
 		if [[ -n "$pkg" ]] && [[ -f "$Temp_Dir/$pkg" ]]; then
-			log_action_begin_msg "Installation du paquet : $pkg"
-			echo " - Installation par 'dpkg' du paquet : $pkg" &>> "$Logfile"
+			log "Installation du paquet : $pkg"
 			dpkg -i --force-all "$Temp_Dir/$pkg" &>> "$Logfile"
 			log_action_end_msg $?
 		fi
@@ -335,8 +328,7 @@ do_install_drivers() {
 # CONFIGURATION DE L'IMPRIMANTE #
 #################################
 do_configure_printer() {
-	echo -e "$Blue Configuration de l'imprimante $Resetcolor"
-	echo "# Configuration de l'imprimante" &>> "$Logfile"
+	log "Configuration de l'imprimante" "Blue"
 	for pkg in "${printer[prn_cups]}" "${printer[prn_drv]}"; do
 		if [[ -n "$pkg" ]] && [[ -f "$Temp_Dir/$pkg" ]]; then
 			Ppd_File=$(dpkg --contents "$Temp_Dir/$pkg" | grep ppd | awk '{print $6}' | sed 's/^.//g')
@@ -349,8 +341,7 @@ do_configure_printer() {
 			fi
 		done
 	fi
-	log_action_begin_msg "Recherche d'un fichier PPD sur votre système"
-	echo " - Recherche d'un fichier PPD" &>> "$Logfile"
+	log "Recherche d'un fichier PPD sur votre système"
 	if [[ -n "$Ppd_File" ]]; then
 		echo " - Fichier PPD : ' $Ppd_File ' trouvé" &>> "$Logfile"
 		log_action_end_msg 0;
@@ -359,9 +350,8 @@ do_configure_printer() {
 		log_action_end_msg 1
 	fi
 	# On ajoute la nouvelle imprimante
-	log_action_begin_msg "Ajout de l'imprimante $Model_Name"
+	log "Ajout de l'imprimante $Model_Name"
 	{
-		echo " - Ajout de l'imprimante $Model_Name"
 		echo " - Backup du fichier /etc/cups/printers.conf.O"
 		cp /etc/cups/printers.conf.O "$Temp_Dir"
 		echo " - Arret du service CUPS"
@@ -392,27 +382,27 @@ do_configure_printer() {
 # CONFIGURATION DU SCANNER #
 ############################
 do_configure_scanner() {
-	echo -e "$Blue Configuration du scanner $Resetcolor"
-	echo "# Configuration du scanner" &>> "$Logfile"
+	log "Configuration du scanner" "Blue"
 	if [[ -n "$Scanner_Deb" ]]; then
 		if [[ $Connection == "USB" ]]; then
-			log_action_begin_msg "Configuration du scanner USB"
-			echo " - Configuration du scanner USB" &>> "$Logfile"
+			log "Configuration du scanner USB"
 			# On ajoute une entrée au fichier /lib/udev/rules.d/60-libsane1.rules
 			if grep -q "ATTRS{idVendor}==\"04f9\", ENV{libsane_matched}=\"yes\"" "$Udev_Rules"; then
+				log_action_end_msg $?
 				echo " - Règle udev deja presente dans le fichier $Udev_Rules" &>> "$Logfile"
+
 			else
 				# ?????????? n ' ajoute pas la regle correctement .
 				sed -i "/LABEL=\"libsane_usb_rules_begin\"/a\
 				\n# Brother\nATTRS{idVendor}==\"04f9\", ENV{libsane_matched}=\"yes\"" "$Udev_Rules"
+				log_action_end_msg $?
 				echo " - Règle udev ajoutée dans le fichier $Udev_Rules" &>> "$Logfile"
 				# On recharge les règles udev
 				# udevadm control --reload
 				udevadm control --reload-rules
 			fi
 		elif [[ $Connection == "Réseau" ]]; then
-			log_action_begin_msg "Configuration du scanner réseau"
-			echo " - Configuration du scanner réseau" &>> "$Logfile"
+			log "Configuration du scanner réseau"
 			if [[ -x /usr/bin/brsaneconfig ]]; then
 				brsaneconfig -a name="SCANNER" model="$Model_Name" ip="$IP" &>> "$Logfile"
 				log_action_end_msg $?
@@ -446,8 +436,7 @@ do_configure_scanner() {
 		# On copie les bibliotheques
 		if [[ "$Arch" == "x86_64" ]] && [[ -d $Lib_Dir ]]; then
 			if [[ -e /usr/bin/brsaneconfig ]]; then cd "$Lib_Dir" || exit;
-				log_action_begin_msg "Copie des bibliotheques nécessaires brsaneconfig"
-				echo " - Copie des bibliotheques nécessaires brsaneconfig" &>> "$Logfile"
+				log "Copie des bibliotheques nécessaires brsaneconfig"
 				cp --force /usr/lib64/libbrcolm.so.1.0.1 .
 				ln -sf libbrcolm.so.1.0.1 libbrcolm.so.1
 				ln -sf libbrcolm.so.1 libbrcolm.so
@@ -460,8 +449,7 @@ do_configure_scanner() {
 				ln -sf libsane-brother.so.1 libsane-brother.so
 				log_action_end_msg 0
 			elif [[ -e /usr/bin/brsaneconfig2 ]]; then cd "$Lib_Dir" || exit
-				log_action_begin_msg "Copie des bibliotheques nécessaires brsaneconfig2"
-				echo " - Copie des bibliotheques nécessaires brsaneconfig2" &>> "$Logfile"
+				log "Copie des bibliotheques nécessaires brsaneconfig2"
 				cp --force /usr/lib64/libbrscandec2.so.1.0.0 .
 				ln -sf libbrscandec2.so.1.0.0 libbrscandec2.so.1
 				ln -sf libbrscandec2.so.1 libbrscandec2.so
@@ -474,8 +462,7 @@ do_configure_scanner() {
 				ln -sf libsane-brother2.so.1 libsane-brother2.so
 				log_action_end_msg 0
 			elif [[ -e /usr/bin/brsaneconfig3 ]]; then cd "$Lib_Dir" || exit
-				log_action_begin_msg "Copie des bibliotheques nécessaires brsaneconfig3"
-				echo " - Copie des bibliotheques nécessaires brsaneconfig3" &>> "$Logfile"
+				log "Copie des bibliotheques nécessaires brsaneconfig3"
 				cp --force /usr/lib64/libbrscandec3.so.1.0.0 .
 				ln -sf libbrscandec3.so.1.0.0 libbrscandec3.so.1
 				ln -sf libbrscandec3.so.1 libbrscandec3.so
@@ -485,21 +472,19 @@ do_configure_scanner() {
 				ln -sf libsane-brother3.so.1 libsane-brother3.so
 				log_action_end_msg 0
 			elif [[ -e /usr/bin/brsaneconfig4 ]]; then cd "$Lib_Dir"/sane || exit
-				log_action_begin_msg "Copie des bibliotheques nécessaires brsaneconfig4"
-				echo " - Copie des bibliotheques nécessaires brsaneconfig4" &>> "$Logfile"
+				log "Copie des bibliotheques nécessaires brsaneconfig4"
 				ln -sf libsane-brother4.so.1.0.7 libsane-brother4.so.1
 				ln -sf libsane-brother4.so.1 libsane-brother4.so
 				log_action_end_msg 0
 			elif [[ -e /usr/bin/brsaneconfig5 ]]; then cd "$Lib_Dir"/sane || exit
-				log_action_begin_msg "Copie des bibliotheques nécessaires brsaneconfig5"
-				echo " - Copie des bibliotheques nécessaires brsaneconfig5" &>> "$Logfile"
+				log "Copie des bibliotheques nécessaires brsaneconfig5"
 				ln -sf /usr/lib/x86_64-linux-gnu/sane/libsane-brother5.so.1.0 libsane-brother5.so.1
 				ln -sf /usr/lib/x86_64-linux-gnu/sane/libsane-brother5.so.1.0.7 libsane-brother5.so.1.0
 				ln -sf /opt/brother/scanner/brscan5/libsane-brother5.so.1.0.7 libsane-brother5.so.1.0.7
 				log_action_end_msg 0
 			else
 				log_action_end_msg 1
-				echo -e "$Red No config binary found. $Resetcolor"
+				log "No config binary found." "Red"
 			fi
 		fi
 	fi
@@ -512,10 +497,9 @@ do_configure_scanner() {
 do_clean() {
 	cd || exit
 	# On réattribue les droits des dossiers/fichiers crées à l'utilisateur
-	chown -Rv "$User": "$Temp_Dir" "$Logfile"
-	echo -e "$Blue Configuration de votre imprimante Brother $Model_Name terminée. Bye :D $Resetcolor
-  Vous pouvez supprimer le dossier $Temp_Dir avec la commande suivante :  rm -r $Temp_Dir"
-  echo "# Configuration imprimante terminée" &>> "$Logfile"
+	chown -R "$User": "$Temp_Dir" "$Logfile"
+	log "Configuration de votre imprimante Brother $Model_Name terminée. Bye :D" "Blue"
+  	log "Vous pouvez supprimer le dossier $Temp_Dir avec la commande suivante :  rm -r $Temp_Dir" "Blue"
 	exit 0
 }
 
@@ -523,6 +507,6 @@ do_init_script
 do_check_prerequisites
 do_download_drivers
 do_install_drivers
-do_configure printer
+do_configure_printer
 do_configure_scanner
 do_clean
