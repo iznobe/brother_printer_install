@@ -18,7 +18,7 @@ valid_ip() {
 control_ip() {
 	if [[ -n "$IP" ]]; then
 		if valid_ip "$IP"; then
-			if ping -c2 "$IP"; then log_action_end_msg 0
+			if ping -q -c2 "$IP"; then log_action_end_msg 0
 			else
 				log "Votre IP ne permet pas de joindre l ' hote. Eclairer votre imprimante si celle-ci est eteinte , ou bien , corriger votre adresse IP."
 				unset IP
