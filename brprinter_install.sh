@@ -16,7 +16,7 @@ valid_ip() {
 
 control_ip() {
 	if [[ -n "$IP" ]]; then
-		if ( (valid_ip "$IP") ); then
+		if valid_ip "$IP"; then
 			if ping -c2 "$IP"; then log_action_end_msg 0
 			else
 				log "Votre IP ne permet pas de joindre l ' hote. Eclairer votre imprimante si celle-ci est eteinte , ou bien , corriger votre adresse IP."
@@ -103,10 +103,13 @@ date=$(date +%F_%T)
 Logfile="/home/$User/brprinter_install.log"
 #Logfile="/home/$User/brprinter_install.$date.log"
 Lib_Dir="/usr/lib/$Arch-linux-gnu"
-Url_Info="http://www.brother.com/pub/bsc/linux/infs"
+# ancienne adresse d' obtention des infos :
+#Url_Info="http://www.brother.com/pub/bsc/linux/infs"
+# nouvelle adresse :
+Url_Info="https://download.brother.com/pub/com/linux/linux/infs/"
 # Packages :
 Url_Pkg="https://download.brother.com/pub/com/linux/linux/packages/"
-Url_Pkg2="http://www.brother.com/pub/bsc/linux/packages"
+Url_Pkg2="http://www.brother.com/pub/bsc/linux/packages" # ancienne adresse d' obtention des paquets
 
 Udev_Rules="/lib/udev/rules.d/60-libsane1.rules"
 Udev_Deb_Name="brother-udev-rule-type1-1.0.2-0.all.deb"
@@ -126,8 +129,6 @@ do_init_script() {
 		log "Achitecture $Arch non prise en charge ! script interrompu." "Red"
 		exit 1
 	fi
-
-	# traitement des parametres passés au script
 	# Si le premier argument est vide on demande le modèle de l'imprimante
 	while [[ -z "$Model_Name" ]]; do read -rp "Entrez votre modèle d' imprimante : " Model_Name;done
 	Model_Name=${Model_Name^^}
@@ -152,6 +153,13 @@ do_init_script() {
 			control_ip "$IP"
 	    done
 	fi
+	# on cree le repertoire temporaire de travail.
+	verif_rep "$Temp_Dir"
+	# On transforme le nom de l'imprimante ( enleve le " - " )
+	Printer_Name="${Model_Name//-/}"
+	# On construit l'URL du fichier contenant les informations
+	Printer_Url_Info="$Url_Info/$Printer_Name"
+	Printer_dl_url="https://support.brother.com/g/b/downloadtop.aspx?c=fr&lang=fr&prod=""$Printer_Name""_us_eu_as"
 	# resumé pour logfile
 	log "                     $date
 			# Ubuntu Codename : $Codename
@@ -163,26 +171,28 @@ do_init_script() {
 			# Repertoire de telechargement des pilotes : $Temp_Dir
 			# Fichier d'informations : $Printer_Url_Info
 			# page de telechargement des pilotes : $Printer_dl_url" "Blue"
-
-	# On transforme le nom de l'imprimante ( enleve le " - " )
-	Printer_Name="${Model_Name//-/}"
-	# On construit l'URL du fichier contenant les informations
-	Printer_Url_Info="$Url_Info/$Printer_Name"
-	Printer_dl_url="https://support.brother.com/g/b/downloadtop.aspx?c=fr&lang=fr&prod=""$Printer_Name""_us_eu_as"
+	log "initialisation du script." "Blue"
 	# On vérifie l'URL
-	log "Obtention des infos de l ' imprimante"
-	if ! wget -q --spider "$Printer_Url_Info"; then
-		log_action_end_msg 1
-		log "Aucun pilote trouvé. Veuillez verifier votre connexion internet .
-		Veuillez vérifier le modèle de votre imprimante ou
-		visitez la page suivante : $Printer_dl_url
-		afin de télécharger les pilotes et les installer manuellement." "Red"
-		exit 2
-	fi
+	Printer_Info="$Temp_Dir/Printer_Info.html"
+	log "Obtention des infos de l' imprimante"
+	wget -q "$Printer_Url_Info" -O "$Printer_Info"
+	
+    log_action_end_msg $?
 	# On vérifie que le fichier fournit les informations
+	log "Vérification du fichier obtenu"
+	
+	if test "$(grep PRINTERNAME "$Printer_Info" | cut -d= -f2)" == "$Printer_Name"; then log_action_end_msg 0
+    	else
+    		log_action_end_msg 1
+    		log "Aucun pilote trouvé. Veuillez verifier votre connexion internet .
+			Veuillez vérifier le modèle de votre imprimante ou
+			visitez la page suivante : $Printer_dl_url
+			afin de télécharger les pilotes et les installer manuellement." "Red"
+			exit 2
+    fi
 	# ???????? pas compris a quoi sert ce controle , ni quelles infos il est censé recuperé . peut etre certaines URL comporte des liens vers d' autres pages
-	Lnk=$(wget -q "$Printer_Url_Info" -O - | grep LNK - | cut -d= -f2)
-	if [[ "$Lnk" ]]; then Printer_Url_Info="$Url_Info/$Lnk"; fi
+	Lnk="$(grep LNK "$Printer_Info" | cut -d= -f2)"
+	if test -n "$Lnk"; then Printer_Url_Info="$Url_Info/$Lnk";log "LNK = $Lnk" "Red";fi
 }
 
 ###############################
@@ -204,7 +214,7 @@ do_check_prerequisites() {
 		if [[ "$Model_Name" == "$i" ]]; then install_pkg "csh";	fi
 	done
 	# On vérifie que le dossier de téléchargement temporaire et /usr/share/cups/model et /var/spool/lpd existent et on les crée le cas échéant
-	verif_rep "/usr/share/cups/model" "/var/spool/lpd" "$Temp_Dir"
+	verif_rep "/usr/share/cups/model" "/var/spool/lpd"
 
 	# On vérifie que le lien symbolique /etc/init.d/lpd existe et on le crée le cas échéant (uniquement pour certaines imprimantes)
 	for i in DCP-1000 DCP-1400 DCP-8020 DCP-8025D DCP-8040 DCP-8045D DCP-8060 DCP-8065DN FAX-2850 FAX-2900 FAX-3800 FAX-4100 FAX-4750e FAX-5750e HL-1030 HL-1230 HL-1240 HL-1250 HL-1270N HL-1430 HL-1440 HL-1450 HL-1470N HL-1650 HL-1670N HL-1850 HL-1870N HL-5030 HL-5040 HL-5050 HL-5070N HL-5130 HL-5140 HL-5150D HL-5170DN HL-5240 HL-5250DN HL-5270DN HL-5280DW HL-6050 HL-6050D MFC-4800 MFC-6800 MFC-8420 MFC-8440 MFC-8460N MFC-8500 MFC-8660DN MFC-8820D MFC-8840D MFC-8860DN MFC-8870DW MFC-9030 MFC-9070 MFC-9160 MFC-9180 MFC-9420CN MFC-9660 MFC-9700 MFC-9760 MFC-9800 MFC-9860 MFC-9880; do
@@ -225,9 +235,6 @@ do_check_prerequisites() {
 do_download_drivers() {
     log "Recherche des pilotes" "Blue"
     log "Recherche des pilotes pour l' imprimante"
-
-    Printer_Info="$Temp_Dir/Printer_Info.html"
-    wget -q "$Printer_Url_Info" -O "$Printer_Info"
     printer=(
         [prn_lpd]="$(grep PRN_LPD_DEB "$Printer_Info"  | cut -d= -f2)"
         [prn_cups]="$(grep PRN_CUP_DEB "$Printer_Info" | cut -d= -f2)"
