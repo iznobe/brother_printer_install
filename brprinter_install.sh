@@ -106,9 +106,9 @@ Lib_Dir="/usr/lib/$Arch-linux-gnu"
 # ancienne adresse d' obtention des infos :
 #Url_Info="http://www.brother.com/pub/bsc/linux/infs"
 # nouvelle adresse :
-Url_Info="https://download.brother.com/pub/com/linux/linux/infs/"
+Url_Info="https://download.brother.com/pub/com/linux/linux/infs"
 # Packages :
-Url_Pkg="https://download.brother.com/pub/com/linux/linux/packages/"
+Url_Pkg="https://download.brother.com/pub/com/linux/linux/packages"
 Url_Pkg2="http://www.brother.com/pub/bsc/linux/packages" # ancienne adresse d' obtention des paquets
 
 Udev_Rules="/lib/udev/rules.d/60-libsane1.rules"
@@ -153,8 +153,6 @@ do_init_script() {
 			control_ip "$IP"
 	    done
 	fi
-	# on cree le repertoire temporaire de travail.
-	verif_rep "$Temp_Dir"
 	# On transforme le nom de l'imprimante ( enleve le " - " )
 	Printer_Name="${Model_Name//-/}"
 	# On construit l'URL du fichier contenant les informations
@@ -172,15 +170,18 @@ do_init_script() {
 			# Fichier d'informations : $Printer_Url_Info
 			# page de telechargement des pilotes : $Printer_dl_url" "Blue"
 	log "initialisation du script." "Blue"
+	# on cree le repertoire temporaire de travail.
+	verif_rep "$Temp_Dir"
 	# On vérifie l'URL
 	Printer_Info="$Temp_Dir/Printer_Info.html"
 	log "Obtention des infos de l' imprimante"
 	wget -q "$Printer_Url_Info" -O "$Printer_Info"
-	
+	#while IFS='=' read -r k v; do printer[$k]=$v; done < <(wget -qO - "$Printer_Url_Info" | sed '/\(]\|rpm\|=\)$/d')
+
     log_action_end_msg $?
 	# On vérifie que le fichier fournit les informations
 	log "Vérification du fichier obtenu"
-	
+	#if test "${printer[PRINTERNAME]}" == "$Printer_Name"; then log_action_end_msg 0
 	if test "$(grep PRINTERNAME "$Printer_Info" | cut -d= -f2)" == "$Printer_Name"; then log_action_end_msg 0
     	else
     		log_action_end_msg 1
@@ -191,6 +192,7 @@ do_init_script() {
 			exit 2
     fi
 	# ???????? pas compris a quoi sert ce controle , ni quelles infos il est censé recuperé . peut etre certaines URL comporte des liens vers d' autres pages
+	#if test -n "${printer[LNK]}"; then Printer_Url_Info="$Url_Info/${printer[LNK]}";log "LNK = ${printer[LNK]}" "Red";fi
 	Lnk="$(grep LNK "$Printer_Info" | cut -d= -f2)"
 	if test -n "$Lnk"; then Printer_Url_Info="$Url_Info/$Lnk";log "LNK = $Lnk" "Red";fi
 }
@@ -204,7 +206,7 @@ do_check_prerequisites() {
 	apt-get update -qq
 	log_action_end_msg $?
 	# On vérifie que la liste des paquets est installée et on l'installe le cas échéant
-	install_pkg "multiarch-support" "lib32stdc++6" "cups" "curl" "wget"
+	install_pkg "multiarch-support" "lib32stdc++6" "cups" "curl" "wget" "gawk"
 
 	# Si un pilote pour le scanner a été trouvé on vérifie que la liste des paquets est installée
 	if [[ -n $Scanner_Deb ]]; then install_pkg "libusb-0.1-4:amd64" "libusb-0.1-4:i386" "sane-utils"; fi
@@ -338,7 +340,7 @@ do_configure_printer() {
 	log "Configuration de l'imprimante" "Blue"
 	for pkg in "${printer[prn_cups]}" "${printer[prn_drv]}"; do
 		if [[ -n "$pkg" ]] && [[ -f "$Temp_Dir/$pkg" ]]; then
-			Ppd_File=$(dpkg --contents "$Temp_Dir/$pkg" | grep ppd | awk '{print $6}' | sed 's/^.//g')
+			Ppd_File=$(dpkg --contents "$Temp_Dir/$pkg" | gawk '/ppd/{sub(".","",$NF); print $NF}')
 		fi
 	done
 	if [[ -z "$Ppd_File" ]]; then
