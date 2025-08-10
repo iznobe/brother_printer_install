@@ -8,6 +8,7 @@
 # multiarch-support , libsane etc ...
 
 if test -f /lib/lsb/init-functions; then . /lib/lsb/init-functions;fi
+shopt -s nullglob globstar extglob
 
 valid_ip() {
     IFS='.' read -ra ip <<< "$1"
@@ -92,9 +93,10 @@ log() {
 
 Model_Name="$1"
 if [ -n "$2" ]; then
-	if [ "$2" = "1" ]; then Connection="Réseau"; elif [ "$2" = "0" ]; then Connection="USB"; fi
+	IP="$2"
+ 	if control_ip "$IP"; then Connection="Réseau"; fi
 fi
-IP="$3"
+
 User="$SUDO_USER"
 Temp_Dir="/tmp/packages"
 Codename="$(lsb_release -cs)"
@@ -122,13 +124,20 @@ declare -A printer
 # PRÉPARATION DU SCRIPT #
 #########################
 do_init_script() {
-	# On vérifie qu'on lance le script en root
-	if ((EUID)); then log "Vous devez lancer ce script en tant que root : sudo bash $0" "Red"; exit 0;fi
 	if [[ -f $Logfile ]]; then mv "$Logfile" "$Logfile".old; fi
+	# On vérifie qu'on lance le script en root
+	if ((EUID)); then log "Vous devez lancer ce script en tant que root : sudo bash $0" "Red"; exit 1;fi
 	if [[ $Arch != "i386" ]] && [[ $Arch != "i686" ]] && [[ $Arch != "x86_64" ]]; then #  && [[ $Arch != "armv7l" ]]
 		log "Achitecture $Arch non prise en charge ! script interrompu." "Red"
-		exit 1
+		exit 2
 	fi
+	# on verifie la connection au serveur
+	if ! nc -z -w5 'brother.com' 80; then
+		log "serveur brother injoignable ! script interrompu." "Red"
+		log "Veuillez verifier votre connexion internet." "Red"
+		exit 3
+	fi
+
 	# Si le premier argument est vide on demande le modèle de l'imprimante
 	while [[ -z "$Model_Name" ]]; do read -rp "Entrez votre modèle d' imprimante : " Model_Name;done
 	Model_Name=${Model_Name^^}
@@ -146,8 +155,8 @@ do_init_script() {
 			;;
 		esac
 	done
-	# Si le 2eme argument est reseau on demande l' IP de l'imprimante
-	if [[ "$Connection" == "Réseau" ]]; then control_ip "$IP";
+	# Si connection == reseau on demande l' IP de l'imprimante
+	if [[ "$Connection" == "Réseau" ]]; then
 		while [[ -z "$IP" ]]; do
 			read -rp "Entrez l'adresse IP de votre imprimante : " IP
 			control_ip "$IP"
@@ -185,8 +194,7 @@ do_init_script() {
 	if test "$(grep PRINTERNAME "$Printer_Info" | cut -d= -f2)" == "$Printer_Name"; then log_action_end_msg 0
     	else
     		log_action_end_msg 1
-    		log "Aucun pilote trouvé. Veuillez verifier votre connexion internet .
-			Veuillez vérifier le modèle de votre imprimante ou
+    		log "Aucun pilote trouvé. Veuillez vérifier le modèle de votre imprimante ou
 			visitez la page suivante : $Printer_dl_url
 			afin de télécharger les pilotes et les installer manuellement." "Red"
 			exit 2
@@ -206,7 +214,11 @@ do_check_prerequisites() {
 	apt-get update -qq
 	log_action_end_msg $?
 	# On vérifie que la liste des paquets est installée et on l'installe le cas échéant
-	install_pkg "multiarch-support" "lib32stdc++6" "cups" "curl" "wget" "gawk"
+	log "installation des paquets requis"
+	if ! install_pkg "multiarch-support" "lib32stdc++6" "cups" "curl" "wget" "gawk"; then
+		log "impossible d' installer les paquets indispensables" "Red"
+		exit 4
+	fi
 
 	# Si un pilote pour le scanner a été trouvé on vérifie que la liste des paquets est installée
 	if [[ -n $Scanner_Deb ]]; then install_pkg "libusb-0.1-4:amd64" "libusb-0.1-4:i386" "sane-utils"; fi
@@ -338,22 +350,18 @@ do_install_drivers() {
 #################################
 do_configure_printer() {
 	log "Configuration de l'imprimante" "Blue"
+	log "Recherche d'un fichier PPD sur votre système"
 	for pkg in "${printer[prn_cups]}" "${printer[prn_drv]}"; do
 		if [[ -n "$pkg" ]] && [[ -f "$Temp_Dir/$pkg" ]]; then
 			Ppd_File=$(dpkg --contents "$Temp_Dir/$pkg" | gawk '/ppd/{sub(".","",$NF); print $NF}')
 		fi
 	done
-	if [[ -z "$Ppd_File" ]]; then
-		for file in $(find /usr/share/cups/model -type f); do
-			if grep -qi Brother "$file" | grep -E "$Model_Name|$Printer_Name"; then
-				Ppd_File="$file"
-			fi
-		done
+	if test -z "$Ppd_File"; then
+		for file in /usr/share/cups/model/**/brother*@($Model_Name|$Printer_Name)*.ppd; do Ppd_File="$file";done
 	fi
-	log "Recherche d'un fichier PPD sur votre système"
-	if [[ -n "$Ppd_File" ]]; then
+	if test -n "$Ppd_File"; then
+		log_action_end_msg 0
 		echo " - Fichier PPD : ' $Ppd_File ' trouvé" &>> "$Logfile"
-		log_action_end_msg 0;
 	else
 		echo " - Fichier PPD : $Ppd_File non trouvé !" &>> "$Logfile"
 		log_action_end_msg 1
