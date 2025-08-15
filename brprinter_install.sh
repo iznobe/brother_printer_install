@@ -41,15 +41,124 @@ libDir="/usr/lib/$arch-linux-gnu"
 declare -A printer
 declare -i err
 
-#########################
- # gestion des arguments
-#########################
-declare -u modelName=$1
+#################
+ # infos Brother
+#################
+# ancienne adresse d' obtention des infos :
+#Url_Info="http://www.brother.com/pub/bsc/linux/infs"
+# nouvelle adresse :
+Url_Info="https://download.brother.com/pub/com/linux/linux/infs"
+# Packages :
+Url_Pkg="https://download.brother.com/pub/com/linux/linux/packages"
+Url_Pkg2="http://www.brother.com/pub/bsc/linux/packages" # ancienne adresse d'obtention des paquets
+
+Udev_Rules="/lib/udev/rules.d/60-libsane1.rules"
+Udev_Deb_Name="brother-udev-rule-type1-1.0.2-0.all.deb"
+Udev_Deb_Url="http://download.brother.com/welcome/dlf006654"
+Scankey_Drv_Deb_Name="brscan-skey-0.3.4-0.amd64.deb"
+
+printerInfo="$Url_Info/$printerName"
+Printer_dl_url="https://support.brother.com/g/b/downloadtop.aspx?c=fr&lang=fr&prod=${printerName}_us_eu_as"
+
+#######################
+ # quelques fonctions #
+#######################
+errQuit()
+{
+    >&2 echo "$@"
+    exit 1
+}
+verif_lien()
+{ # pour faire un boucle, suffit-il vérifier que le nombre d'arguments est pair ?
+    local lien=$1 cible=$2
+    if ! test -L "$lien"
+    then
+        ln -s "$cible" "$lien"
+    fi
+}
+install_pkg()
+{
+    for pkg do
+        if ! dpkg-query -f '${binary:Package}\n' -W "$pkg" &>/dev/null
+        then
+            apt-get install -qq "$pkg"
+        fi
+    done
+}
+
+###########################
+ # quelques vérifications #
+###########################
+if test "$DistroName" != "Ubuntu"; then errQuit "La distribution n’est pas Ubuntu ou une des ses variantes officielles.";fi
+if test "$SHELL" != "/bin/bash"; then errQuit "Shell non compatible. utilisez : bash"; fi
+if test "$arch" != "x86_64"; then errQuit "Système non compatible."; fi
+#if [[ $arch != @(i386|i686|x86_64) ]]
+if ((EUID)); then errQuit "Vous devez lancer le script en root : sudo $0"; fi
+if ! nc -z -w5 'brother.com' 80; then errQuit "le site \"brother.com\" n'est pas joignable.";fi
+
+##########################
+ # DETECTION AUTOMATIQUE #
+##########################
+# printer_name= ???
+declare -a printer_IP printer_name
+my_IP="$(hostname -I | cut -d ' ' -f1)"
+#echo "$my_IP"
+printer_IP+="$(nmap -sn -oG - "$my_IP"/24 | gawk 'tolower($3) ~ /brother/{print $2}')"
+#echo "${printer_IP[*]}"
+for p_ip in "${printer_IP[@]}"; do
+    wget -E "$p_ip" -O "$tmpDir/index.html"
+    # version robuste :
+    printer_name+="$(xmllint --html --xpath '//title/text()' "$tmpDir/index.html" 2>/dev/null | cut -d ' ' -f2)"
+    #echo "printer_name == ${printer_name[*]}"
+done
+# echo "printer_name RESULT ==
+# TAB printer_IP == ${printer_IP[*]}
+# TAB printer_name == ${printer_name[*]}"
+
+# printer_name= ???
+printer_name+="$(lsusb | grep 04f9: | cut -c 58- | cut -d ' ' -f2)"
+# echo "printer_name == ${printer_name[*]}"
+
+case ${#printer_name[*]} in
+    0) echo "Aucune imprimante détectée !
+       Êtes vous sùr de l' avoir connectée au port USB de votre ordinateur ou à votre reseau local ?"
+       # on repars donc avec les questions de base : modele etc ...
+        ;;
+    1)  echo "une seule imprimante détectée"
+        modelName=${printer_name[0]} # ! printer_name != printerName
+        # pas besoin de poser de question , il ne reste plus qu ' a installer
+        ;;
+    *)  echo "plus d' une imprimante a été détectée"
+        # il faut presenter sous forme de liste les éléments recupérés :
+        # modele du materriel : IP ou USB
+        # et demander à l' utilisateur de choisir un numero dans cette liste
+        n_print=$(("${#printer_name[@]}"))
+        for n in "${!printer_name[@]}"; do
+            echo " $((n+1))  ⇒  ${printer_name[$n]}"
+        done
+        while test -z "$choix"; do
+            read -rp "Choisissez le numero qui correspond à l' imprimante que voulez installer" choix
+            if ! ((choix > 0 && choix <= n_print)); then
+                echo "choix invalide !"
+                unset choix
+            fi
+        done
+        modelName="${printer_name[$((choix-1))]}"
+        ;;
+esac
+
+##########################
+ # gestion des arguments #
+##########################
+if test -z $modelName then
+    declare -u modelName=$1
+else
+    modelName="${modelName^^}"
 until test -n "$modelName"
 do
     read -rp 'Entrez le modèle de votre imprimante : ' modelName
 done
-printerName="${modelName//-/}"
+printerName="${modelName//-/}" # ! printer_name != printerName
 #check IP
 until test -n "$IP"
 do
@@ -74,100 +183,24 @@ do
     fi
 done
 
-#################
- # infos Brother
-#################
-# ancienne adresse d' obtention des infos :
-#Url_Info="http://www.brother.com/pub/bsc/linux/infs"
-# nouvelle adresse :
-Url_Info="https://download.brother.com/pub/com/linux/linux/infs"
-# Packages :
-Url_Pkg="https://download.brother.com/pub/com/linux/linux/packages"
-Url_Pkg2="http://www.brother.com/pub/bsc/linux/packages" # ancienne adresse d'obtention des paquets
-
-Udev_Rules="/lib/udev/rules.d/60-libsane1.rules"
-Udev_Deb_Name="brother-udev-rule-type1-1.0.2-0.all.deb"
-Udev_Deb_Url="http://download.brother.com/welcome/dlf006654"
-Scankey_Drv_Deb_Name="brscan-skey-0.3.4-0.amd64.deb"
-
-printerInfo="$Url_Info/$printerName"
-Printer_dl_url="https://support.brother.com/g/b/downloadtop.aspx?c=fr&lang=fr&prod=${printerName}_us_eu_as"
-
-######################
- # quelques fonctions
-######################
-errQuit()
-{
-    >&2 echo "$@"
-    exit 1
-}
-verif_lien()
-{ # pour faire un boucle, suffit-il vérifier que le nombre d'arguments est pair ?
-    local lien=$1 cible=$2
-    if ! test -L "$lien"
-    then
-        ln -s "$cible" "$lien"
-    fi
-}
-install_pkg()
-{
-    for pkg do
-        if ! dpkg-query -f '${binary:Package}\n' -W "$pkg" &>/dev/null
-        then
-            apt-get install -qq "$pkg"
-        fi
-    done
-}
-
-##########################
- # quelques vérifications
-##########################
-if test "$DistroName" != "Ubuntu"; then errQuit "La distribution n’est pas Ubuntu ou une des ses variantes officielles.";fi
-if test "$SHELL" != "/bin/bash"; then errQuit "Shell non compatible. utilisez : bash"; fi
-if test "$arch" != "x86_64"; then errQuit "Système non compatible."; fi
-#if [[ $arch != @(i386|i686|x86_64) ]]
-if ((EUID)); then errQuit "Vous devez lancer le script en root : sudo $0"; fi
-if ! nc -z -w5 'brother.com' 80; then errQuit "le site \"brother.com\" n'est pas joignable.";fi
-
-# NET_printer_name= ???
-declare -i printer_IP NET_printer_name USB_printer_name
-my_IP="$(hostname -I | cut -d ' ' -f1)"
-#echo "$my_IP"
-printer_IP+="$(nmap -sn -oG - "$my_IP"/24 | gawk 'tolower($3) ~ /brother/{print $2}')"
-#echo "${printer_IP[*]}"
-for p_ip in "${printer_IP[@]}"; do
-    wget -E "$p_ip" -O "$tmpDir/index.html"
-    # version robuste :
-    NET_printer_name+="$(xmllint --html --xpath '//title/text()' "$tmpDir/index.html" 2>/dev/null | cut -d ' ' -f2)"
-    #echo "NET_printer_name == ${NET_printer_name[*]}"
-done
-echo "NET_printer_name RESULT ==
-TAB printer_IP == ${printer_IP[*]}
-TAB NET_printer_name == ${NET_printer_name[*]}"
-
-# USB_printer_name= ???
-USB_printer_name+="$(lsusb | grep 04f9: | cut -c 58- | cut -d ' ' -f2)"
-echo "USB_printer_name == ${USB_printer_name[*]}"
-
-exit
-##################################################
- # initialisation du tableau associatif `printer'
-##################################################
+###################################################
+ # initialisation du tableau associatif `printer' #
+###################################################
 while IFS='=' read -r k v
 do
     printer[$k]=$v
 done < <(wget -qO- "$printerInfo" | sed '/\(]\|rpm\|=\)$/d')
 
-########################################################
- # vérification de variables disponibles dans `printer'
-########################################################
+#########################################################
+ # vérification de variables disponibles dans `printer' #
+#########################################################
 if ! test "${printer[PRINTERNAME]}" = "$printerName"
 then
     errQuit "les données du fichier info recupéré et le nom de l'imprimante ne correspondent pas."
 fi
 if test -n "${printer[LNK]}"
 then
-    printerInf="$Url_Info/${printer[LNK]}"
+    printerInfo="$Url_Info/${printer[LNK]}"
 fi
 
 if test -n "${printer[SCANNER_DRV]}"
@@ -191,9 +224,9 @@ else
     echo "pas de pilote pour le scanner."
 fi
 
-##########################
- # préparation du système
-##########################
+###########################
+ # préparation du système #
+###########################
 # if test -f "$Logfile"; then
 #     Old_Date="$(head -n1 "$Logfile")"
 #     mv -v "$Logfile" "$Logfile"."$Old_Date".log
@@ -237,9 +270,9 @@ do
     fi
 done
 
-##############################
- # téléchargement des pilotes
-##############################
+###############################
+ # téléchargement des pilotes #
+###############################
 #echo " DL DRV TAB == ${printer[*]}"
 for drv in "${printer[@]}"
 do
@@ -265,9 +298,9 @@ done
 dpkg --install --force-all  "${pkg2install[@]}"
 ##
 
-#################################
- # configuration de l'imprimante
-#################################
+##################################
+ # configuration de l'imprimante #
+##################################
 #retrouver le fichier `.ppd' pour l'imprimante
 for drv in "PRN_CUP_DEB" "PRN_DRV_DEB"
 do
@@ -310,9 +343,9 @@ else
     lpadmin -p "$modelName" -E -v 'usb://dev/usb/lp0' -P "$Ppd_File"
 fi
 
-############################
- # configuration du scanner
-############################
+#############################
+ # configuration du scanner #
+#############################
 if test -z "ÎP"
 then #USB
     if grep -q "ATTRS{idVendor}==\"04f9\", ENV{libsane_matched}=\"yes\"" "$Udev_Rules"
