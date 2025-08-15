@@ -103,7 +103,7 @@ if ! nc -z -w5 'brother.com' 80; then errQuit "le site \"brother.com\" n'est pas
 declare -a printer_IP printer_name
 my_IP="$(hostname -I | cut -d ' ' -f1)"
 #echo "$my_IP"
-printer_IP+="$(nmap -sn -oG - "$my_IP"/24 | gawk 'tolower($3) ~ /brother/{print $2}')"
+printer_IP=( $(nmap -sn -oG - "$my_IP"/24 | gawk 'tolower($3) ~ /brother/{print $2}') )
 #echo "${printer_IP[*]}"
 for p_ip in "${printer_IP[@]}"; do
     wget -E "$p_ip" -O "$tmpDir/index.html"
@@ -128,7 +128,7 @@ case ${#printer_name[*]} in
         modelName=${printer_name[0]} # ! printer_name != printerName
         # pas besoin de poser de question , il ne reste plus qu ' a installer
         ;;
-    *)  echo "plus d' une imprimante a été détectée"
+    *)  echo "plusieurs imprimantes ont été détectées"
         # il faut presenter sous forme de liste les éléments recupérés :
         # modele du materriel : IP ou USB
         # et demander à l' utilisateur de choisir un numero dans cette liste
@@ -150,10 +150,11 @@ esac
 ##########################
  # gestion des arguments #
 ##########################
-if test -z $modelName then
+if test -z $modelName; then
     declare -u modelName=$1
 else
     modelName="${modelName^^}"
+fi
 until test -n "$modelName"
 do
     read -rp 'Entrez le modèle de votre imprimante : ' modelName
