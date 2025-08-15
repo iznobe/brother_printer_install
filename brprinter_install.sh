@@ -7,31 +7,48 @@
 # verification de l' installation des dependances / paquets sur version ubuntu 24.04 et superieures
 # multiarch-support , libsane etc ...
 
+
 if test -f /lib/lsb/init-functions; then . /lib/lsb/init-functions;fi
 shopt -s nullglob globstar extglob
 
-valid_ip() {
-    IFS='.' read -ra ip <<< "$1"
-    [[ ${ip[0]} -gt 0 ]] && [[ ${ip[0]} -le 255 ]] && [[ ${ip[1]} -ge 0 ]] && [[ ${ip[1]} -le 255 ]] && [[ ${ip[2]} -ge 0 ]] && [[ ${ip[2]} -le 255 ]] && [[ ${ip[3]} -ge 0 ]] && [[ ${ip[3]} -le 255 ]]
-}
+############################
+# définitions de variables #
+############################
+User="$SUDO_USER"
+Codename="$(lsb_release -cs)"
+Arch="$(uname -m)"
+date=$(date +%F_%T)
+Temp_Dir="/tmp/packages"
+Lib_Dir="/usr/lib/""$Arch""-linux-gnu"
+Logfile="/home/""$User""/brprinter_install.log"
+#Logfile="/home/$User/brprinter_install.$date.log"
 
+declare -A printer
+
+###################
+# LES FONCTIONS : #
+###################
 control_ip() {
-	if [[ -n "$IP" ]]; then
-		if valid_ip "$IP"; then
-			if ping -q -c2 "$IP"; then log_action_end_msg 0
-			else
-				log "Votre IP ne permet pas de joindre l ' hote. Eclairer votre imprimante si celle-ci est eteinte , ou bien , corriger votre adresse IP."
-				unset IP
-				log_action_end_msg 1
-			fi
+	log "Controle de l' adresse IP entrée"
+	IFS='.' read -ra ip <<< "$1"
+	if (( ${#ip[*]} == 4 )); then
+	    for i in "${ip[@]}"; do
+	        ((n++ ? i >=0 && i<=255 : i>0 && i<=255))
+	    done
+		if ping -qc2 "$1"; then
+			IP="$1"
+			log_action_end_msg 0
 		else
-			log "L ' adresse IP que vous avez entrée est incorrecte"
+			log "Votre IP ne permet pas de joindre l ' hote. Eclairer votre imprimante si celle-ci est eteinte , ou bien , corriger votre adresse IP." "Red"
 			unset IP
 			log_action_end_msg 1
 		fi
+	else
+		log "L ' adresse IP que vous avez entrée est incorrecte" "Red"
+		unset IP
+		log_action_end_msg 1
 	fi
 }
-
 install_pkg() {
 	for pkg do
 		log "Recherche du paquet : ' $pkg ' sur votre système"
@@ -47,7 +64,6 @@ install_pkg() {
 		fi
 	done
 }
-
 verif_rep() {
 	for dir do
 	log "Recherche du dossier ' $dir ' sur votre système"
@@ -60,7 +76,6 @@ verif_rep() {
 		fi
 	done
 }
-
 verif_lien() { # utilisation : # verif_lien "lien" "cible" . affichage de ls -l ' lien : /etc/init.d/lpd ~> /etc/init.d/cups : cible '
 	# Musique -> /datas/iznobe/Musique
 	# lien -> cible
@@ -76,7 +91,6 @@ verif_lien() { # utilisation : # verif_lien "lien" "cible" . affichage de ls -l 
 	else log_action_end_msg $?;
 	fi
 }
-
 log() {
 	message="$1"
 	if test -z "$2"; then
@@ -91,25 +105,16 @@ log() {
 	fi
 }
 
-Model_Name="$1"
-if [ -n "$2" ]; then
-	IP="$2"
- 	if control_ip "$IP"; then Connection="Réseau"; fi
-fi
-
-User="$SUDO_USER"
-Temp_Dir="/tmp/packages"
-Codename="$(lsb_release -cs)"
-Arch="$(uname -m)"
-date=$(date +%F_%T)
-Logfile="/home/$User/brprinter_install.log"
-#Logfile="/home/$User/brprinter_install.$date.log"
-Lib_Dir="/usr/lib/$Arch-linux-gnu"
+#################
+ # infos Brother
+#################
 # ancienne adresse d' obtention des infos :
 #Url_Info="http://www.brother.com/pub/bsc/linux/infs"
 # nouvelle adresse :
 Url_Info="https://download.brother.com/pub/com/linux/linux/infs"
+# FULL_PATH="https://download.brother.com/pub/com/linux/linux/infs/$Model_Name
 # Packages :
+# FULL_PATH="https://download.brother.com/pub/com/linux/linux/packages/$Model_Name
 Url_Pkg="https://download.brother.com/pub/com/linux/linux/packages"
 Url_Pkg2="http://www.brother.com/pub/bsc/linux/packages" # ancienne adresse d' obtention des paquets
 
@@ -118,92 +123,106 @@ Udev_Deb_Name="brother-udev-rule-type1-1.0.2-0.all.deb"
 Udev_Deb_Url="http://download.brother.com/welcome/dlf006654/"
 Scankey_Drv_Deb_Name="brscan-skey-0.3.4-0.amd64.deb"
 
-declare -A printer
-
 #########################
 # PRÉPARATION DU SCRIPT #
 #########################
-do_init_script() {
-	if [[ -f $Logfile ]]; then mv "$Logfile" "$Logfile".old; fi
-	# On vérifie qu'on lance le script en root
-	if ((EUID)); then log "Vous devez lancer ce script en tant que root : sudo bash $0" "Red"; exit 1;fi
-	if [[ $Arch != "i386" ]] && [[ $Arch != "i686" ]] && [[ $Arch != "x86_64" ]]; then #  && [[ $Arch != "armv7l" ]]
-		log "Achitecture $Arch non prise en charge ! script interrompu." "Red"
+# controles pour que le script s ' execute dans les bonnes conditions
+if test -f "$Logfile"; then
+	Old_Date="$(head -n1 "$Logfile")"
+	mv "$Logfile" "$Logfile"."$Old_Date".log
+fi
+echo "$date" >> "$Logfile" # indispensable pour la rotation du log .
+if test "$SHELL" != "/bin/bash"; then
+	log "shell incompatible ! executez ce script avec bash . script interrompu." "Red"
+	exit 1
+fi
+# On vérifie qu'on lance le script en root
+if ((EUID)); then
+	log "Vous devez lancer ce script en tant que root : sudo bash $0" "Red"
+	exit 1
+fi
+if test "$Arch" != "x86_64"; then
+	log "Achitecture $Arch non prise en charge ! script interrompu." "Red"
+	exit 1
+fi
+# on verifie la connection au serveur
+if ! nc -z -w5 'brother.com' 80; then
+	log "serveur brother injoignable ! script interrompu." "Red"
+	log "Veuillez verifier votre connexion internet." "Red"
+	exit 1
+fi
+# gestion des arguments
+Model_Name="$1"
+# Si le premier argument est vide on demande le modèle de l'imprimante
+while [[ -z "$Model_Name" ]]; do read -rp "Entrez votre modèle d' imprimante : " Model_Name;done
+Model_Name=${Model_Name^^}
+
+if test -n "$2"; then
+ 	if control_ip "$2"; then Connection="Réseau";fi
+fi
+# Si le 2eme argument est vide on demande comment est connectée l'imprimante
+while [[ -z "$Connection" ]]; do
+	read -rp "Sélectionner le type de connectivité : [0] USB - [1] Réseau , votre choix : "
+	case $REPLY in
+		0)
+			Connection="USB"
+		;;
+		1)
+			Connection="Réseau"
+			log "Vous devez d' abord vous assurer que votre imprimante possède une adresse IP fixe." "Red"
+			log "Veuillez consulter le manuel de votre imprimante pour plus de détails : http://support.brother.com/g/b/productsearch.aspx?c=fr&lang=fr&content=ml" "Red"
+		;;
+	esac
+done
+# Si connection == reseau on demande l' IP de l'imprimante ou si elle a étée entrée en tant qu' argument .
+if [[ "$Connection" == "Réseau" ]]; then
+	while [[ -z "$IP" ]]; do
+		read -rp "Entrez l'adresse IP de votre imprimante : " IP
+    done
+    control_ip "$IP"
+fi
+# On transforme le nom de l'imprimante ( enleve le " - " )
+Printer_Name="${Model_Name//-/}"
+# On construit l'URL du fichier contenant les informations
+Printer_Url_Info="$Url_Info/$Printer_Name"
+Printer_dl_url="https://support.brother.com/g/b/downloadtop.aspx?c=fr&lang=fr&prod=""$Printer_Name""_us_eu_as"
+# resumé pour logfile
+log "
+		# Ubuntu Codename : $Codename
+		# Architecture : $Arch
+		# Modèle de l'imprimante : $Model_Name
+		# Type de connexion : $Connection
+		# Adresse IP : $IP
+		# Repertoire courant : $Temp_Dir
+		# Repertoire de telechargement des pilotes : $Temp_Dir
+		# Fichier d'informations : $Printer_Url_Info
+		# page de telechargement des pilotes : $Printer_dl_url" "Blue"
+log "initialisation du script." "Blue"
+# on cree le repertoire temporaire de travail.
+verif_rep "$Temp_Dir"
+# On vérifie l'URL
+Printer_Info="$Temp_Dir/Printer_Info.html"
+log "Obtention des infos de l' imprimante"
+wget -q "$Printer_Url_Info" -O "$Printer_Info"
+#while IFS='=' read -r k v; do printer[$k]=$v; done < <(wget -qO - "$Printer_Url_Info" | sed '/\(]\|rpm\|=\)$/d')
+
+log_action_end_msg $?
+# On vérifie que le fichier fournit les informations
+log "Vérification du fichier obtenu"
+#if test "${printer[PRINTERNAME]}" == "$Printer_Name"; then log_action_end_msg 0
+if test "$(grep PRINTERNAME "$Printer_Info" | cut -d= -f2)" == "$Printer_Name"; then log_action_end_msg 0
+	else
+		log_action_end_msg 1
+		log "Aucun pilote trouvé. Veuillez vérifier le modèle de votre imprimante ou
+		visitez la page suivante : $Printer_dl_url
+		afin de télécharger les pilotes et les installer manuellement." "Red"
 		exit 2
-	fi
-	# on verifie la connection au serveur
-	if ! nc -z -w5 'brother.com' 80; then
-		log "serveur brother injoignable ! script interrompu." "Red"
-		log "Veuillez verifier votre connexion internet." "Red"
-		exit 3
-	fi
+fi
+# ???????? pas compris a quoi sert ce controle , ni quelles infos il est censé recuperé . peut etre certaines URL comporte des liens vers d' autres pages
+#if test -n "${printer[LNK]}"; then Printer_Url_Info="$Url_Info/${printer[LNK]}";log "LNK = ${printer[LNK]}" "Red";fi
+Lnk="$(grep LNK "$Printer_Info" | cut -d= -f2)"
+if test -n "$Lnk"; then Printer_Url_Info="$Url_Info/$Lnk";log "LNK = $Lnk" "Red";fi
 
-	# Si le premier argument est vide on demande le modèle de l'imprimante
-	while [[ -z "$Model_Name" ]]; do read -rp "Entrez votre modèle d' imprimante : " Model_Name;done
-	Model_Name=${Model_Name^^}
-	# Si le 2eme argument est vide on demande comment est connectée l'imprimante
-	while [[ -z "$Connection" ]]; do
-		read -rp "Sélectionner le type de connectivité : [0] USB - [1] Réseau , votre choix : "
-		case $REPLY in
-			0)
-				Connection="USB"
-			;;
-			1)
-				Connection="Réseau"
-				log "Vous devez d' abord vous assurer que votre imprimante possède une adresse IP fixe." "Red"
-				log "Veuillez consulter le manuel de votre imprimante pour plus de détails : http://support.brother.com/g/b/productsearch.aspx?c=fr&lang=fr&content=ml" "Red"
-			;;
-		esac
-	done
-	# Si connection == reseau on demande l' IP de l'imprimante
-	if [[ "$Connection" == "Réseau" ]]; then
-		while [[ -z "$IP" ]]; do
-			read -rp "Entrez l'adresse IP de votre imprimante : " IP
-			control_ip "$IP"
-	    done
-	fi
-	# On transforme le nom de l'imprimante ( enleve le " - " )
-	Printer_Name="${Model_Name//-/}"
-	# On construit l'URL du fichier contenant les informations
-	Printer_Url_Info="$Url_Info/$Printer_Name"
-	Printer_dl_url="https://support.brother.com/g/b/downloadtop.aspx?c=fr&lang=fr&prod=""$Printer_Name""_us_eu_as"
-	# resumé pour logfile
-	log "                     $date
-			# Ubuntu Codename : $Codename
-			# Architecture : $Arch
-			# Modèle de l'imprimante : $Model_Name
-			# Type de connexion : $Connection
-			# Adresse IP : $IP
-			# Repertoire courant : $Temp_Dir
-			# Repertoire de telechargement des pilotes : $Temp_Dir
-			# Fichier d'informations : $Printer_Url_Info
-			# page de telechargement des pilotes : $Printer_dl_url" "Blue"
-	log "initialisation du script." "Blue"
-	# on cree le repertoire temporaire de travail.
-	verif_rep "$Temp_Dir"
-	# On vérifie l'URL
-	Printer_Info="$Temp_Dir/Printer_Info.html"
-	log "Obtention des infos de l' imprimante"
-	wget -q "$Printer_Url_Info" -O "$Printer_Info"
-	#while IFS='=' read -r k v; do printer[$k]=$v; done < <(wget -qO - "$Printer_Url_Info" | sed '/\(]\|rpm\|=\)$/d')
-
-    log_action_end_msg $?
-	# On vérifie que le fichier fournit les informations
-	log "Vérification du fichier obtenu"
-	#if test "${printer[PRINTERNAME]}" == "$Printer_Name"; then log_action_end_msg 0
-	if test "$(grep PRINTERNAME "$Printer_Info" | cut -d= -f2)" == "$Printer_Name"; then log_action_end_msg 0
-    	else
-    		log_action_end_msg 1
-    		log "Aucun pilote trouvé. Veuillez vérifier le modèle de votre imprimante ou
-			visitez la page suivante : $Printer_dl_url
-			afin de télécharger les pilotes et les installer manuellement." "Red"
-			exit 2
-    fi
-	# ???????? pas compris a quoi sert ce controle , ni quelles infos il est censé recuperé . peut etre certaines URL comporte des liens vers d' autres pages
-	#if test -n "${printer[LNK]}"; then Printer_Url_Info="$Url_Info/${printer[LNK]}";log "LNK = ${printer[LNK]}" "Red";fi
-	Lnk="$(grep LNK "$Printer_Info" | cut -d= -f2)"
-	if test -n "$Lnk"; then Printer_Url_Info="$Url_Info/$Lnk";log "LNK = $Lnk" "Red";fi
-}
 
 ###############################
 # VERIFICATION DES PRÉ-REQUIS #
@@ -450,7 +469,7 @@ do_configure_scanner() {
 				log_action_end_msg $?
 			fi
 		fi
-		# On copie les bibliotheques
+		# On copie les bibliotheques # Lib_Dir="/usr/lib/$Arch-linux-gnu"
 		if [[ "$Arch" == "x86_64" ]] && [[ -d $Lib_Dir ]]; then
 			if [[ -e /usr/bin/brsaneconfig ]]; then cd "$Lib_Dir" || exit;
 				log "Copie des bibliotheques nécessaires brsaneconfig"
@@ -520,10 +539,9 @@ do_clean() {
 	exit 0
 }
 
-do_init_script
 do_check_prerequisites
 do_download_drivers
-do_install_drivers
+#do_install_drivers
 do_configure_printer
 do_configure_scanner
 do_clean
