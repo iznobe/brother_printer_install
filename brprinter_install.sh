@@ -129,16 +129,16 @@ if ((EUID)); then errQuit "Vous devez lancer le script en root : sudo $0"; fi
 if ! nc -z -w5 'brother.com' 80; then errQuit "le site \"brother.com\" n'est pas joignable.";fi
 #NET_printer_name= ???
 my_IP="$(hostname -I | cut -d ' ' -f1)"
-echo "$my_IP"
+#echo "$my_IP"
 printer_IP="$(nmap -sn -p 80 -oG - "$my_IP"/24 | gawk 'tolower($3) ~ /brother/{print $2}')"
-echo "$printer_IP"
+#echo "$printer_IP"
 wget -E "$my_IP" -O "$tmpDir/index.html"
 NET_printer_name="$(grep -oP '(?<=<title>).*?(?=</title>)' $tmpDir/index.html | cut -d ' ' -f2)"
-echo "NET_printer_name == $NET_printer_name"
+#echo "NET_printer_name == $NET_printer_name"
 
 #USB_printer_name= ???
-
-
+USB_printer_name="$(lsusb | grep 04f9: | cut -c 58- | cut -d ' ' -f2)"
+echo "USB_printer_name == $USB_printer_name"
 ##################################################
  # initialisation du tableau associatif `printer'
 ##################################################
