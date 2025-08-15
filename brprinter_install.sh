@@ -118,6 +118,7 @@ install_pkg()
         fi
     done
 }
+
 ##########################
  # quelques vérifications
 ##########################
@@ -127,18 +128,28 @@ if test "$arch" != "x86_64"; then errQuit "Système non compatible."; fi
 #if [[ $arch != @(i386|i686|x86_64) ]]
 if ((EUID)); then errQuit "Vous devez lancer le script en root : sudo $0"; fi
 if ! nc -z -w5 'brother.com' 80; then errQuit "le site \"brother.com\" n'est pas joignable.";fi
-#NET_printer_name= ???
+
+# NET_printer_name= ???
+declare -i printer_IP NET_printer_name USB_printer_name
 my_IP="$(hostname -I | cut -d ' ' -f1)"
 #echo "$my_IP"
-printer_IP="$(nmap -sn -oG - "$my_IP"/24 | gawk 'tolower($3) ~ /brother/{print $2}')"
-#echo "$printer_IP"
-wget -E "$my_IP" -O "$tmpDir/index.html"
-NET_printer_name="$(grep -oP '(?<=<title>).*?(?=</title>)' $tmpDir/index.html | cut -d ' ' -f2)"
-#echo "NET_printer_name == $NET_printer_name"
+printer_IP+="$(nmap -sn -oG - "$my_IP"/24 | gawk 'tolower($3) ~ /brother/{print $2}')"
+#echo "${printer_IP[*]}"
+for p_ip in "${printer_IP[@]}"; do
+    wget -E "$p_ip" -O "$tmpDir/index.html"
+    # version robuste :
+    NET_printer_name+="$(xmllint --html --xpath '//title/text()' "$tmpDir/index.html" 2>/dev/null | cut -d ' ' -f2)"
+    #echo "NET_printer_name == ${NET_printer_name[*]}"
+done
+echo "NET_printer_name RESULT ==
+TAB printer_IP == ${printer_IP[*]}
+TAB NET_printer_name == ${NET_printer_name[*]}"
 
-#USB_printer_name= ???
-USB_printer_name="$(lsusb | grep 04f9: | cut -c 58- | cut -d ' ' -f2)"
-echo "USB_printer_name == $USB_printer_name"
+# USB_printer_name= ???
+USB_printer_name+="$(lsusb | grep 04f9: | cut -c 58- | cut -d ' ' -f2)"
+echo "USB_printer_name == ${USB_printer_name[*]}"
+
+exit
 ##################################################
  # initialisation du tableau associatif `printer'
 ##################################################
@@ -146,6 +157,7 @@ while IFS='=' read -r k v
 do
     printer[$k]=$v
 done < <(wget -qO- "$printerInfo" | sed '/\(]\|rpm\|=\)$/d')
+
 ########################################################
  # vérification de variables disponibles dans `printer'
 ########################################################
@@ -182,11 +194,11 @@ fi
 ##########################
  # préparation du système
 ##########################
-if test -f "$Logfile"; then
-    Old_Date="$(head -n1 "$Logfile")"
-    mv -v "$Logfile" "$Logfile"."$Old_Date".log
-fi
-echo "$date" >> "$Logfile" # indispensable pour la rotation du log .
+# if test -f "$Logfile"; then
+#     Old_Date="$(head -n1 "$Logfile")"
+#     mv -v "$Logfile" "$Logfile"."$Old_Date".log
+# fi
+# echo "$date" >> "$Logfile" # indispensable pour la rotation du log .
 
 for d in  "$tmpDir" "/usr/share/cups/model" "/var/spool/lpd"
 do
@@ -197,7 +209,7 @@ do
 done
 
 apt-get update -qq
-install_pkg "multiarch-support" "lib32stdc++6" "cups" "curl" "wget" "nmap" "libusb-0.1-4:amd64" "libusb-0.1-4:i386" "sane-utils"
+install_pkg "multiarch-support" "lib32stdc++6" "cups" "curl" "wget" "nmap" "libxml2-utils" "libusb-0.1-4:amd64" "libusb-0.1-4:i386" "sane-utils"
 for i in \
     DCP-{11{0,5,7}C,120C,31{0,5}CN,340CW} \
     FAX-{18{15,20,35,40}C,19{2,4}0CN,2440C} \
@@ -224,7 +236,6 @@ do
         fi
     fi
 done
-##
 
 ##############################
  # téléchargement des pilotes
@@ -298,8 +309,6 @@ then
 else
     lpadmin -p "$modelName" -E -v 'usb://dev/usb/lp0' -P "$Ppd_File"
 fi
-#restauration fichier conf
-
 
 ############################
  # configuration du scanner
