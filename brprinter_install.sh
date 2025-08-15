@@ -122,20 +122,22 @@ install_pkg()
  # quelques vérifications
 ##########################
 if test "$DistroName" != "Ubuntu"; then errQuit "La distribution n’est pas Ubuntu ou une des ses variantes officielles.";fi
-if test $SHELL != "/bin/bash"; then errQuit "Shell non compatible. utilisez : bash"; fi
+if test "$SHELL" != "/bin/bash"; then errQuit "Shell non compatible. utilisez : bash"; fi
 if test "$arch" != "x86_64"; then errQuit "Système non compatible."; fi
 #if [[ $arch != @(i386|i686|x86_64) ]]
 if ((EUID)); then errQuit "Vous devez lancer le script en root : sudo $0"; fi
 if ! nc -z -w5 'brother.com' 80; then errQuit "le site \"brother.com\" n'est pas joignable.";fi
-
+#NET_printer_name= ???
 my_IP="$(hostname -I | cut -d ' ' -f1)"
 echo "$my_IP"
 printer_IP="$(nmap -sn -p 80 -oG - "$my_IP"/24 | gawk 'tolower($3) ~ /brother/{print $2}')"
 echo "$printer_IP"
-wget -E "192.168.1.84" -O "$tmpDir/index.html"
-exit
-USB_printer_name= ???
-NET_prineter_name= ???
+wget -E "$my_IP" -O "$tmpDir/index.html"
+NET_printer_name="$(grep -oP '(?<=<title>).*?(?=</title>)' $tmpDir/index.html | cut -d ' ' -f2)"
+echo "NET_printer_name == $NET_printer_name"
+
+#USB_printer_name= ???
+
 
 ##################################################
  # initialisation du tableau associatif `printer'
