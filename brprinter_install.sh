@@ -35,7 +35,7 @@ user="$SUDO_USER"
 arch="$(uname -m)"
 date=$(date +%F_%T)
 tmpDir="/tmp/packages"
-#Logfile="/home/$user/brprinter_install.log"
+Logfile="/home/$user/brprinter_install.log"
 libDir="/usr/lib/$arch-linux-gnu"
 
 declare -A printer
@@ -130,7 +130,7 @@ if ! nc -z -w5 'brother.com' 80; then errQuit "le site \"brother.com\" n'est pas
 #NET_printer_name= ???
 my_IP="$(hostname -I | cut -d ' ' -f1)"
 #echo "$my_IP"
-printer_IP="$(nmap -sn -p 80 -oG - "$my_IP"/24 | gawk 'tolower($3) ~ /brother/{print $2}')"
+printer_IP="$(nmap -sn -oG - "$my_IP"/24 | gawk 'tolower($3) ~ /brother/{print $2}')"
 #echo "$printer_IP"
 wget -E "$my_IP" -O "$tmpDir/index.html"
 NET_printer_name="$(grep -oP '(?<=<title>).*?(?=</title>)' $tmpDir/index.html | cut -d ' ' -f2)"
@@ -182,10 +182,12 @@ fi
 ##########################
  # préparation du système
 ##########################
-if test -f "$Logfile"
-then
-    mv -v "$Logfile" "$Logfile.$date"
+if test -f "$Logfile"; then
+    Old_Date="$(head -n1 "$Logfile")"
+    mv -v "$Logfile" "$Logfile"."$Old_Date".log
 fi
+echo "$date" >> "$Logfile" # indispensable pour la rotation du log .
+
 for d in  "$tmpDir" "/usr/share/cups/model" "/var/spool/lpd"
 do
     if ! test -d "$d"
