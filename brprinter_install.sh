@@ -92,32 +92,38 @@ install_pkg()
 if test "$DistroName" != "Ubuntu"; then errQuit "La distribution n’est pas Ubuntu ou une des ses variantes officielles.";fi
 if test "$SHELL" != "/bin/bash"; then errQuit "Shell non compatible. utilisez : bash"; fi
 if test "$arch" != "x86_64"; then errQuit "Système non compatible."; fi
-#if [[ $arch != @(i386|i686|x86_64) ]]
+# if [[ $arch != @(i386|i686|x86_64) ]]
 if ((EUID)); then errQuit "Vous devez lancer le script en root : sudo $0"; fi
 if ! nc -z -w5 'brother.com' 80; then errQuit "le site \"brother.com\" n'est pas joignable.";fi
 
 ##########################
  # DETECTION AUTOMATIQUE #
 ##########################
+# tt="$(grep -oP '(?<=<title>).*?(?=</title>)' $file)"
 # printer_name= ???
 declare -a printer_IP printer_name
 my_IP="$(hostname -I | cut -d ' ' -f1)"
 #echo "$my_IP"
 printer_IP=( $(nmap -sn -oG - "$my_IP"/24 | gawk 'tolower($3) ~ /brother/{print $2}') )
-#echo "${printer_IP[*]}"
+echo "${printer_IP[*]}"
 for p_ip in "${printer_IP[@]}"; do
-    wget -E "$p_ip" -O "$tmpDir/index.html"
-    # version robuste :
-    printer_name+="$(xmllint --html --xpath '//title/text()' "$tmpDir/index.html" 2>/dev/null | cut -d ' ' -f2)"
-    #echo "printer_name == ${printer_name[*]}"
+    if wget -E "$p_ip" -O "$tmpDir/index.html"; then
+        # version robuste :
+        printer_name+=("$(xmllint --html --xpath '//title/text()' "$tmpDir/index.html" 2>/dev/null | cut -d ' ' -f2)")
+        #echo "printer_name == ${printer_name[*]}"
+    fi
 done
-# echo "printer_name RESULT ==
-# TAB printer_IP == ${printer_IP[*]}
-# TAB printer_name == ${printer_name[*]}"
+#echo "printer_name RESULT ==
+#TAB printer_IP == ${printer_IP[*]}
+#TAB printer_name == ${printer_name[*]}"
 
 # printer_name= ???
-printer_name+="$(lsusb | grep 04f9: | cut -c 58- | cut -d ' ' -f2)"
-# echo "printer_name == ${printer_name[*]}"
+if test lsusb | grep 04f9:; then
+    printer_name+=( "$(lsusb | grep 04f9: | cut -c 58- | cut -d ' ' -f2)" )
+fi
+#echo "printer_name ==
+#${#printer_name[*]} ,
+#${printer_name[*]}"
 
 case ${#printer_name[*]} in
     0) echo "Aucune imprimante détectée !
@@ -150,7 +156,7 @@ esac
 ##########################
  # gestion des arguments #
 ##########################
-if test -z $modelName; then
+if test -z "$modelName"; then
     declare -u modelName=$1
 else
     modelName="${modelName^^}"
@@ -175,7 +181,7 @@ do
     IFS='.' read -ra ip <<< "$IP"
     for i in "${ip[@]}"
     do
-        ((n++ ? i >=0 && i<=255 : i>0 && i<=255)) || err+=1
+        ((n++ ? i >=0 && i<=255 : i>0 && i<=255)) || err+="1"
     done
     if (( ${#ip[*]} != 4 )) || ((err)) || ! ping -qc2 "$IP"
     then
@@ -221,13 +227,14 @@ then
         errQuit "Impossible d’évaluer la version de la distribution."
     fi
 else
-    err+=1
+    err+="1"
     echo "pas de pilote pour le scanner."
 fi
 
 ###########################
  # préparation du système #
 ###########################
+# a remettre le script en service
 # if test -f "$Logfile"; then
 #     Old_Date="$(head -n1 "$Logfile")"
 #     mv -v "$Logfile" "$Logfile"."$Old_Date".log
@@ -322,12 +329,12 @@ then
 fi
 case ${#PPDs[*]} in
     0) echo "no ppd"
-        err+=1
+        err+="1"
         ;;
     1)  echo one ppd
         Ppd_File=${PPDs[0]}
         ;;
-    *)  err+=1
+    *)  err+="1"
         echo "more than one ppd"
         Ppd_File=${PPDs[0]}
         ;;
