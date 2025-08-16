@@ -204,7 +204,6 @@ verif_rep "$Temp_Dir"
 Printer_Info="$Temp_Dir/Printer_Info.html"
 log "Obtention des infos de l' imprimante"
 wget -q "$Printer_Url_Info" -O "$Printer_Info"
-#while IFS='=' read -r k v; do printer[$k]=$v; done < <(wget -qO - "$Printer_Url_Info" | sed '/\(]\|rpm\|=\)$/d')
 
 log_action_end_msg $?
 # On vérifie que le fichier fournit les informations
@@ -520,7 +519,7 @@ do_configure_scanner() {
 				log_action_end_msg 0
 			else
 				log_action_end_msg 1
-				log "No config binary found." "Red"
+				log "Le dossier $Lib_Dir n'as pas été trouvé. Copie des bibliotheques impossible !" "Red"
 			fi
 		fi
 	fi
@@ -541,7 +540,7 @@ do_clean() {
 
 do_check_prerequisites
 do_download_drivers
-#do_install_drivers
+do_install_drivers
 do_configure_printer
 do_configure_scanner
 do_clean
