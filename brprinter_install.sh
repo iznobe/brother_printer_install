@@ -193,7 +193,7 @@ log "
 		# Modèle de l'imprimante : $Model_Name
 		# Type de connexion : $Connection
 		# Adresse IP : $IP
-		# Repertoire courant : $Temp_Dir
+		# Repertoire courant : $PWD
 		# Repertoire de telechargement des pilotes : $Temp_Dir
 		# Fichier d'informations : $Printer_Url_Info
 		# page de telechargement des pilotes : $Printer_dl_url" "Blue"
