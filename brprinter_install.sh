@@ -57,7 +57,7 @@ Udev_Deb_Name="brother-udev-rule-type1-1.0.2-0.all.deb"
 Udev_Deb_Url="http://download.brother.com/welcome/dlf006654"
 Scankey_Drv_Deb_Name="brscan-skey-0.3.4-0.amd64.deb"
 
-Printer_dl_url="https://support.brother.com/g/b/downloadtop.aspx?c=fr&lang=fr&prod=${printerName}_us_eu_as"
+#Printer_dl_url="https://support.brother.com/g/b/downloadtop.aspx?c=fr&lang=fr&prod=${printerName}_us_eu_as"
 
 #######################
  # quelques fonctions #
@@ -104,13 +104,17 @@ apt-get update -qq
 # scanner : "libusb-0.1-4:amd64" "libusb-0.1-4:i386" "sane-utils"
 install_pkg "wget" "nmap" "libxml2-utils" "gawk"
 
+if ! test -d "$tmpDir"
+then
+    mkdir -pv "$tmpDir"
+fi
 declare -u modelName=$1
 if test -z "$modelName"
 then
     ##########################
      # DETECTION AUTOMATIQUE #
     ##########################
-    # printer_name= ???
+    # NET_printer_name= ???
     declare -a printer_IP printer_name
     my_IP="$(hostname -I | cut -d ' ' -f1)"
     mapfile -t printer_IP < <(nmap -sn -oG - "$my_IP"/24 | gawk 'tolower($3) ~ /brother/{print $2}')
@@ -118,7 +122,6 @@ then
     #echo "${printer_IP[*]}"
     for p_ip in "${printer_IP[@]}"; do
         if wget -E "$p_ip" -O "$tmpDir/index.html"; then
-            # version robuste :
             printer_name+=( "réseau : $(xmllint --html --xpath '//title/text()' "$tmpDir/index.html" 2>/dev/null | cut -d ' ' -f2)" )
             #echo "printer_name == ${printer_name[*]}"
         fi
@@ -127,13 +130,14 @@ then
     #TAB printer_IP == ${printer_IP[*]}
     #TAB printer_name == ${printer_name[*]}"
 
-    # printer_name= ???
+    # USB_printer_name= ???
     if lsusb | grep -q 04f9:
     then
         mapfile -t printer_usb < <(lsusb | gawk '/04f9:/ {print $10}')
         for p_usb in "${printer_usb[@]}"
         do
             printer_name+=( "usb : $p_usb" )
+            printer_IP+=("USB")
         done
     fi
     #echo "printer_name ==
@@ -146,7 +150,7 @@ then
            # on repars donc avec les questions de base : modele etc ...
             ;;
         1)  echo "Une seule imprimante détectée."
-            modelName=${printer_name[0]##* } # ! printer_name != printerName
+            modelName=${printer_name[0]} # ! printer_name != printerName
             if [[ ${printer_name[0]} =~ "^réseau" ]]
             then
                 IP=${printer_IP[0]}
@@ -162,7 +166,7 @@ then
             n_print=$(("${#printer_name[@]}"))
             for n in "${!printer_name[@]}"
             do
-                echo " $((n+1))  ⇒  ${printer_name[$n]} ${printer_IP[$n]}"
+                echo " $((n+1))  ⇒  ${printer_name[$n]}  :  ${printer_IP[$n]}"
             done
             while test -z "$choix"
             do
@@ -173,7 +177,7 @@ then
                     unset choix
                 fi
             done
-            modelName="${printer_name[$((choix-1))]##* }"
+            modelName="${printer_name[$((choix-1))]}"
             if [[ ${printer_name[$((choix-1))]} =~ "^réseau" ]]
             then
                 IP=${printer_IP[$((choix-1))]}
@@ -230,16 +234,12 @@ fi
  # initialisation du tableau associatif `printer' #
 ###################################################
 # creation $Url_PrinterInfo
-if ! test -d "$tmpDir"
-then
-    mkdir -pv "$tmpDir"
-fi
 Url_PrinterInfo="$Url_Info/$printerName"
 F_P_fichier_Info="$tmpDir/$printerName.info"
 wget -q "$Url_PrinterInfo" -O "$F_P_fichier_Info"
 if ! test "$(grep PRINTERNAME "$F_P_fichier_Info" | cut -d= -f2)" == "$printerName"
 then
-    errQuit "les données du fichier info recupéré et le nom de l’imprimante ne correspondent pas."
+    errQuit "Les données du fichier info récupéré et le nom de l’imprimante ne correspondent pas."
 elif test "$(grep LNK "$F_P_fichier_Info" | cut -d= -f2)"; then
     Url_PrinterInfo="$Url_Info/$(grep LNK "$F_P_fichier_Info" | cut -d= -f2)"
 fi
@@ -252,11 +252,6 @@ done < <(wget -qO- "$Url_PrinterInfo" | sed '/\(]\|rpm\|=\)$/d')
 #########################################################
  # vérification de variables disponibles dans `printer' #
 #########################################################
-# if test "${printer[PRINTERNAME]}" != "$printerName"
-# then
-#     echo "${printer[PRINTERNAME]} ......$printerName"
-#     errQuit "les données du fichier info recupéré et le nom de l'imprimante ne correspondent pas."
-# fi
 if test -n "${printer[SCANNER_DRV]}"
 then
     install_pkg "libusb-0.1-4:amd64" "libusb-0.1-4:i386" "sane-utils"
@@ -292,7 +287,6 @@ install_pkg "multiarch-support" "lib32stdc++6" "cups"
 
 for d in "/usr/share/cups/model" "/var/spool/lpd"
 do
-    echo "$d"
     if ! test -d "$d"
     then
         mkdir -pv "$d"
@@ -333,8 +327,8 @@ done
 for drv in "${printer[@]}"
 do
     if [[ $drv == @($printerName|no|yes) ]]; then continue;fi
-#    for addr in "$Url_Pkg" "$Url_Pkg2"
-#    do
+    for addr in "$Url_Pkg"
+    do
         if ! test -f "$tmpDir/$drv"
         then
             Url_Deb="$Url_Pkg/$drv"
@@ -346,15 +340,14 @@ do
         else
             break
         fi
-#    done
+    done
     pkg2install+=( "$tmpDir/$drv" )
 done
 echo "PKG2INSTALL == ${pkg2install[*]}"
 #installation des pilotes
 if (( ${#pkg2install[*]} == 0 ))
 then
-    echo "Rien à installer"
-    exit 5
+    errQuit "Rien à installer."
 else
     dpkg --install --force-all  "${pkg2install[@]}"
 fi
@@ -495,4 +488,3 @@ then
             ;;
     esac
 fi
-
