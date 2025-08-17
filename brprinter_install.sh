@@ -349,7 +349,7 @@ do
 #    done
     pkg2install+=( "$tmpDir/$drv" )
 done
-echo "PKG2INSTALL == ${pkg2install[@]}"
+echo "PKG2INSTALL == ${pkg2install[*]}"
 #installation des pilotes
 if (( ${#pkg2install[*]} == 0 ))
 then
