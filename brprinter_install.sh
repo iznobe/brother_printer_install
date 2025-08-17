@@ -37,7 +37,6 @@ date=$(date +%F_%T)
 tmpDir="/tmp/packages"
 Logfile="/home/$user/brprinter_install.log"
 libDir="/usr/lib/$arch-linux-gnu"
-F_P_fichier_Info="$tmpDir$printerName.info"
 
 declare -A printer
 declare -i err
@@ -51,14 +50,13 @@ declare -i err
 Url_Info="https://download.brother.com/pub/com/linux/linux/infs"
 # Packages :
 Url_Pkg="https://download.brother.com/pub/com/linux/linux/packages"
-Url_Pkg2="http://www.brother.com/pub/bsc/linux/packages" # ancienne adresse d'obtention des paquets
+#Url_Pkg2="http://www.brother.com/pub/bsc/linux/packages" # ancienne adresse d'obtention des paquets
 
 Udev_Rules="/lib/udev/rules.d/60-libsane1.rules"
 Udev_Deb_Name="brother-udev-rule-type1-1.0.2-0.all.deb"
 Udev_Deb_Url="http://download.brother.com/welcome/dlf006654"
 Scankey_Drv_Deb_Name="brscan-skey-0.3.4-0.amd64.deb"
 
-Url_PrinterInfo="$Url_Info/$printerName"
 Printer_dl_url="https://support.brother.com/g/b/downloadtop.aspx?c=fr&lang=fr&prod=${printerName}_us_eu_as"
 
 #######################
@@ -90,117 +88,158 @@ install_pkg()
 ###########################
  # quelques vérifications #
 ###########################
-if test "$DistroName" != "Ubuntu"; then errQuit "La distribution n’est pas Ubuntu ou une des ses variantes officielles.";fi
+if test "$DistroName" != "Ubuntu"; then errQuit "La distribution n’est pas Ubuntu ou une des ses variantes officielles."; fi
 if test "$SHELL" != "/bin/bash"; then errQuit "Shell non compatible. utilisez : bash"; fi
 if test "$arch" != "x86_64"; then errQuit "Système non compatible."; fi
 # if [[ $arch != @(i386|i686|x86_64) ]]
 if ((EUID)); then errQuit "Vous devez lancer le script en root : sudo $0"; fi
-if ! nc -z -w5 'brother.com' 80; then errQuit "le site \"brother.com\" n'est pas joignable.";fi
+if ! nc -z -w5 'brother.com' 80; then errQuit "le site \"brother.com\" n'est pas joignable."; fi
 
-##########################
- # DETECTION AUTOMATIQUE #
-##########################
-# tt="$(grep -oP '(?<=<title>).*?(?=</title>)' $file)"
-# printer_name= ???
-declare -a printer_IP printer_name
-my_IP="$(hostname -I | cut -d ' ' -f1)"
-#echo "$my_IP"
-#mapfile -t mountedParts < <(grep "$Part" /etc/mtab | cut -d ' ' -f 2)
-mapfile -t printer_IP < <(nmap -sn -oG - "$my_IP"/24 | gawk 'tolower($3) ~ /brother/{print $2}')
-#printer_IP=( $(nmap -sn -oG - "$my_IP"/24 | gawk 'tolower($3) ~ /brother/{print $2}') )
-echo "${printer_IP[*]}"
-for p_ip in "${printer_IP[@]}"; do
-    if wget -E "$p_ip" -O "$tmpDir/index.html"; then
-        # version robuste :
-        printer_name+=( "$(xmllint --html --xpath '//title/text()' "$tmpDir/index.html" 2>/dev/null | cut -d ' ' -f2)" )
-        #echo "printer_name == ${printer_name[*]}"
-    fi
-done
-#echo "printer_name RESULT ==
-#TAB printer_IP == ${printer_IP[*]}
-#TAB printer_name == ${printer_name[*]}"
+######################
+ # prérequis pour le script #
+######################
+apt-get update -qq
+# script : "wget" "nmap" "libxml2-utils" " gawk"
+# imprimantes : "multiarch-support" "lib32stdc++6" "cups"
+# scanner : "libusb-0.1-4:amd64" "libusb-0.1-4:i386" "sane-utils"
+install_pkg "wget" "nmap" "libxml2-utils" "gawk"
 
-# printer_name= ???
-if test "$(lsusb | grep 04f9:)"; then
-    printer_name+=( "$(lsusb | grep 04f9: | cut -c 58- | cut -d ' ' -f2)" )
-fi
-#echo "printer_name ==
-#${#printer_name[*]} ,
-#${printer_name[*]}"
-
-case ${#printer_name[*]} in
-    0) echo "Aucune imprimante détectée !
-       Êtes vous sûr de l’avoir connectée au port USB de votre ordinateur ou à votre réseau local ?"
-       # on repars donc avec les questions de base : modele etc ...
-        ;;
-    1)  echo "une seule imprimante détectée"
-        modelName=${printer_name[0]^^} # ! printer_name != printerName
-        # pas besoin de poser de question , il ne reste plus qu ' a installer
-        ;;
-    *)  echo "plusieurs imprimantes ont été détectées"
-        # il faut presenter sous forme de liste les éléments recupérés :
-        # modele du materriel : IP ou USB
-        # et demander à l' utilisateur de choisir un numero dans cette liste
-        n_print=$(("${#printer_name[@]}"))
-        for n in "${!printer_name[@]}"; do
-            echo " $((n+1))  ⇒  ${printer_name[$n]}"
-        done
-        while test -z "$choix"; do
-            read -rp "Choisissez le numéro qui correspond à l’imprimante que voulez installer : " choix
-            if ! ((choix > 0 && choix <= n_print)); then
-                echo "choix invalide !"
-                unset choix
-            fi
-        done
-        modelName="${printer_name[$((choix-1))]^^}"
-        ;;
-esac
-
-##########################
- # gestion des arguments #
-##########################
-# if test -n "$modelName"; then
-#     modelName="${modelName^^}"
-# else
-#     declare -u modelName=$1
-# fi
 declare -u modelName=$1
-until test -n "$modelName"
-do
-    read -rp 'Entrez le modèle de votre imprimante : ' modelName
-done
+if test -z "$modelName"
+then
+    ##########################
+     # DETECTION AUTOMATIQUE #
+    ##########################
+    # printer_name= ???
+    declare -a printer_IP printer_name
+    my_IP="$(hostname -I | cut -d ' ' -f1)"
+    mapfile -t printer_IP < <(nmap -sn -oG - "$my_IP"/24 | gawk 'tolower($3) ~ /brother/{print $2}')
+    #printer_IP=( $(nmap -sn -oG - "$my_IP"/24 | gawk 'tolower($3) ~ /brother/{print $2}') )
+    #echo "${printer_IP[*]}"
+    for p_ip in "${printer_IP[@]}"; do
+        if wget -E "$p_ip" -O "$tmpDir/index.html"; then
+            # version robuste :
+            printer_name+=( "réseau : $(xmllint --html --xpath '//title/text()' "$tmpDir/index.html" 2>/dev/null | cut -d ' ' -f2)" )
+            #echo "printer_name == ${printer_name[*]}"
+        fi
+    done
+    #echo "printer_name RESULT ==
+    #TAB printer_IP == ${printer_IP[*]}
+    #TAB printer_name == ${printer_name[*]}"
+
+    # printer_name= ???
+    if lsusb | grep -q 04f9:
+    then
+        mapfile -t printer_usb < <(lsusb | gawk '/04f9:/ {print $10}')
+        for p_usb in "${printer_usb[@]}"
+        do
+            printer_name+=( "usb : $p_usb" )
+        done
+    fi
+    #echo "printer_name ==
+    #${#printer_name[*]} ,
+    #${printer_name[*]}"
+
+    case ${#printer_name[*]} in
+        0) echo "Aucune imprimante détectée !
+           Êtes vous sûr de l’avoir connectée au port USB de votre ordinateur ou à votre réseau local ?"
+           # on repars donc avec les questions de base : modele etc ...
+            ;;
+        1)  echo "Une seule imprimante détectée."
+            modelName=${printer_name[0]##* } # ! printer_name != printerName
+            if [[ ${printer_name[0]} =~ "^réseau" ]]
+            then
+                IP=${printer_IP[0]}
+            else
+                usb="true"
+            fi
+            # pas besoin de poser de question , il ne reste plus qu ' a installer
+            ;;
+        *)  echo "Plusieurs imprimantes ont été détectées."
+            # il faut presenter sous forme de liste les éléments recupérés :
+            # modele du materriel : IP ou USB
+            # et demander à l' utilisateur de choisir un numero dans cette liste
+            n_print=$(("${#printer_name[@]}"))
+            for n in "${!printer_name[@]}"
+            do
+                echo " $((n+1))  ⇒  ${printer_name[$n]} ${printer_IP[$n]}"
+            done
+            while test -z "$choix"
+            do
+                read -rp "Choisissez le numero qui correspond à l’imprimante que voulez installer : " choix
+                if ! ((choix > 0 && choix <= n_print))
+                then
+                    echo "Choix invalide !"
+                    unset choix
+                fi
+            done
+            modelName="${printer_name[$((choix-1))]##* }"
+            if [[ ${printer_name[$((choix-1))]} =~ "^réseau" ]]
+            then
+                IP=${printer_IP[$((choix-1))]}
+            else
+                usb="true"
+            fi
+            ;;
+    esac
+#else
+    ##########################
+     # gestion des arguments #
+    ##########################
+    # if test -n "$modelName"; then
+    #     modelName="${modelName^^}"
+    # else
+    #     declare -u modelName=$1
+    # fi
+    until test -n "$modelName"
+    do
+        read -rp 'Entrez le modèle de votre imprimante : ' modelName
+    done
+fi
 printerName="${modelName//-/}" # ! printer_name != printerName
 #check IP
-until test -n "$IP"
-do
-    read -rp "Voulez-vous configurer votre imprimante pour qu'elle fonctionne en réseau ? [o/N]: "
-    [[ $REPLY == [YyOo] ]] || break
-    if test -n "$2"
-    then
-        IP=$2
-        shift $#
-    else
-        read -rp "Entrez l'adresse IP de votre imprimante : " IP
-    fi
-    IFS='.' read -ra ip <<< "$IP"
-    for i in "${ip[@]}"
+if test "$usb" = "true"
+then
+    echo "Installation en USB."
+else
+    until test -n "$IP"
     do
-        ((n++ ? i >=0 && i<=255 : i>0 && i<=255)) || err+="1"
+        read -rp "Voulez-vous configurer votre imprimante pour qu’elle fonctionne en réseau ? [o/N] "
+        [[ $REPLY == [YyOo] ]] || break
+        if test -n "$2"
+        then
+            IP=$2
+            shift $#
+        else
+            read -rp "Entrez l’adresse IP de votre imprimante : " IP
+        fi
+        IFS='.' read -ra ip <<< "$IP"
+        for i in "${ip[@]}"
+        do
+            ((n++ ? i >=0 && i<=255 : i>0 && i<=255)) || err+="1"
+        done
+        if (( ${#ip[*]} != 4 )) || ((err)) || ! ping -qc2 "$IP"
+        then
+            err=0
+            unset IP
+        fi
     done
-    if (( ${#ip[*]} != 4 )) || ((err)) || ! ping -qc2 "$IP"
-    then
-        err=0
-        unset IP
-    fi
-done
+fi
 
 ###################################################
  # initialisation du tableau associatif `printer' #
 ###################################################
 # creation $Url_PrinterInfo
-wget -q "$Url_Info/$printerName" -O "$F_P_fichier_Info"
-if ! test "$(grep PRINTERNAME "$F_P_fichier_Info" | cut -d= -f2)" == "$printerName"; then
-    errQuit "les données du fichier info recupéré et le nom de l'imprimante ne correspondent pas."
+if ! test -d "$tmpDir"
+then
+    mkdir -pv "$tmpDir"
+fi
+Url_PrinterInfo="$Url_Info/$printerName"
+F_P_fichier_Info="$tmpDir/$printerName.info"
+wget -q "$Url_PrinterInfo" -O "$F_P_fichier_Info"
+if ! test "$(grep PRINTERNAME "$F_P_fichier_Info" | cut -d= -f2)" == "$printerName"
+then
+    errQuit "les données du fichier info recupéré et le nom de l’imprimante ne correspondent pas."
 elif test "$(grep LNK "$F_P_fichier_Info" | cut -d= -f2)"; then
     Url_PrinterInfo="$Url_Info/$(grep LNK "$F_P_fichier_Info" | cut -d= -f2)"
 fi
@@ -220,6 +259,7 @@ done < <(wget -qO- "$Url_PrinterInfo" | sed '/\(]\|rpm\|=\)$/d')
 # fi
 if test -n "${printer[SCANNER_DRV]}"
 then
+    install_pkg "libusb-0.1-4:amd64" "libusb-0.1-4:i386" "sane-utils"
     printer[udev_rules]="$Udev_Deb_Name"
     . <(wget -qO- "$Url_Info/${printer[SCANNER_DRV]}.lnk" | sed -n '/^DEB/s/^/scanner_/p')
     . <(wget -qO- "$Url_Info/${printer[SCANKEY_DRV]}.lnk" | sed -n '/^DEB/s/^/scanKey_/p')
@@ -236,7 +276,7 @@ then
     fi
 else
     err+="1"
-    echo "pas de pilote pour le scanner."
+    echo "Pas de pilote pour le scanner."
 fi
 
 ###########################
@@ -248,17 +288,17 @@ fi
 #     mv -v "$Logfile" "$Logfile"."$Old_Date".log
 # fi
 # echo "$date" >> "$Logfile" # indispensable pour la rotation du log .
+install_pkg "multiarch-support" "lib32stdc++6" "cups"
 
-for d in  "$tmpDir" "/usr/share/cups/model" "/var/spool/lpd"
+for d in "/usr/share/cups/model" "/var/spool/lpd"
 do
+    echo "$d"
     if ! test -d "$d"
     then
         mkdir -pv "$d"
     fi
 done
 
-apt-get update -qq
-install_pkg "multiarch-support" "lib32stdc++6" "cups" "curl" "wget" "nmap" "libxml2-utils" "libusb-0.1-4:amd64" "libusb-0.1-4:i386" "sane-utils"
 for i in \
     DCP-{11{0,5,7}C,120C,31{0,5}CN,340CW} \
     FAX-{18{15,20,35,40}C,19{2,4}0CN,2440C} \
@@ -293,11 +333,11 @@ done
 for drv in "${printer[@]}"
 do
     if [[ $drv == @($printerName|no|yes) ]]; then continue;fi
-    for addr in "$Url_Pkg" "$Url_Pkg2"
-    do
+#    for addr in "$Url_Pkg" "$Url_Pkg2"
+#    do
         if ! test -f "$tmpDir/$drv"
         then
-            Url_Deb="$addr/$drv"
+            Url_Deb="$Url_Pkg/$drv"
             if test "$drv" = "${printer[udev_rules]}"
             then
                 Url_Deb="$Udev_Deb_Url/$drv"
@@ -306,13 +346,18 @@ do
         else
             break
         fi
-    done
+#    done
     pkg2install+=( "$tmpDir/$drv" )
 done
-#echo "PKG2INSTALL == ${pkg2install[@]}"
+echo "PKG2INSTALL == ${pkg2install[@]}"
 #installation des pilotes
-dpkg --install --force-all  "${pkg2install[@]}"
-##
+if (( ${#pkg2install[*]} == 0 ))
+then
+    echo "Rien à installer"
+    exit 5
+else
+    dpkg --install --force-all  "${pkg2install[@]}"
+fi
 
 ##################################
  # configuration de l'imprimante #
@@ -362,7 +407,7 @@ fi
 #############################
  # configuration du scanner #
 #############################
-if test -z "ÎP"
+if test -z "$IP"
 then #USB
     if grep -q "ATTRS{idVendor}==\"04f9\", ENV{libsane_matched}=\"yes\"" "$Udev_Rules"
     then
@@ -450,3 +495,4 @@ then
             ;;
     esac
 fi
+
