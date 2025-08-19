@@ -88,16 +88,23 @@ install_pkg()
 ###########################
  # quelques vérifications #
 ###########################
-if test "$DistroName" != "Ubuntu"; then errQuit "La distribution n’est pas Ubuntu ou une des ses variantes officielles."; fi
+#if test "$DistroName" != "Ubuntu"; then errQuit "La distribution n’est pas Ubuntu ou une des ses variantes officielles."; fi
 if test "$SHELL" != "/bin/bash"; then errQuit "Shell non compatible. utilisez : bash"; fi
+#if test "$arch" != "armv7l"; then errQuit "Système non compatible."; fi
+# if [[ $arch != @(i386|i686|) ]] armv7l
 if test "$arch" != "x86_64"; then errQuit "Système non compatible."; fi
-# if [[ $arch != @(i386|i686|x86_64) ]]
 if ((EUID)); then errQuit "Vous devez lancer le script en root : sudo $0"; fi
 if ! nc -z -w5 'brother.com' 80; then errQuit "le site \"brother.com\" n'est pas joignable."; fi
 
 ######################
  # prérequis pour le script #
 ######################
+# a remettre le script en service
+# if test -f "$Logfile"; then
+#     Old_Date="$(head -n1 "$Logfile")"
+#     mv -v "$Logfile" "$Logfile"."$Old_Date".log
+# fi
+# echo "$date" >> "$Logfile" # indispensable pour la rotation du log .
 apt-get update -qq
 # script : "wget" "nmap" "libxml2-utils" " gawk"
 # imprimantes : "multiarch-support" "lib32stdc++6" "cups"
@@ -116,16 +123,22 @@ then
     ##########################
     # NET_printer_name= ???
     declare -a printer_IP printer_name
-    my_IP="$(hostname -I | cut -d ' ' -f1)"
-    mapfile -t printer_IP < <(nmap -sn -oG - "$my_IP"/24 | gawk 'tolower($3) ~ /brother/{print $2}')
-    #printer_IP=( $(nmap -sn -oG - "$my_IP"/24 | gawk 'tolower($3) ~ /brother/{print $2}') )
-    #echo "${printer_IP[*]}"
-    for p_ip in "${printer_IP[@]}"; do
-        if wget -E "$p_ip" -O "$tmpDir/index.html"; then
-            printer_name+=( "réseau : $(xmllint --html --xpath '//title/text()' "$tmpDir/index.html" 2>/dev/null | cut -d ' ' -f2)" )
-            #echo "printer_name == ${printer_name[*]}"
-        fi
-    done
+    # my_IP="$(hostname -I | cut -d ' ' -f1)"
+    # mapfile -t printer_IP < <(nmap -sn -oG - "$my_IP"/24 | gawk 'tolower($3) ~ /brother/{print $2}')
+    # #printer_IP=( $(nmap -sn -oG - "$my_IP"/24 | gawk 'tolower($3) ~ /brother/{print $2}') )
+    # #echo "${printer_IP[*]}"
+    # for p_ip in "${printer_IP[@]}"; do
+    #     if wget -E "$p_ip" -O "$tmpDir/index.html"; then
+    #         printer_name+=( "$(xmllint --html --xpath '//title/text()' "$tmpDir/index.html" 2>/dev/null | cut -d ' ' -f2)" )
+    #         #echo "printer_name == ${printer_name[*]}"
+    #     fi
+    # done
+
+    ##### VERSION AVAHI-BROWSE #####
+    mapfile -t printer_IP < <(avahi-browse -d local _http._tcp -tkrp | gawk -F';' '/^=/ && /IPv4/ && /Brother/ && !/USB/ {print $8}')
+    mapfile -t printer_name < <(avahi-browse -d local _http._tcp -tkrp | gawk -F';' '/^=/ && /IPv4/ && /Brother/ && !/USB/ {sub(/Brother\\032/,"",$4); sub(/\\032.*/,"",$4); print $4}')
+    ##### VERSION AVAHI-BROWSE #####
+
     #echo "printer_name RESULT ==
     #TAB printer_IP == ${printer_IP[*]}
     #TAB printer_name == ${printer_name[*]}"
@@ -136,7 +149,7 @@ then
         mapfile -t printer_usb < <(lsusb | gawk '/04f9:/ {print $10}')
         for p_usb in "${printer_usb[@]}"
         do
-            printer_name+=( "usb : $p_usb" )
+            printer_name+=( "$p_usb" )
             printer_IP+=("USB")
         done
     fi
@@ -151,12 +164,7 @@ then
             ;;
         1)  echo "Une seule imprimante détectée."
             modelName=${printer_name[0]} # ! printer_name != printerName
-            if [[ ${printer_name[0]} =~ "^réseau" ]]
-            then
-                IP=${printer_IP[0]}
-            else
-                usb="true"
-            fi
+            IP=${printer_IP[0]}
             # pas besoin de poser de question , il ne reste plus qu ' a installer
             ;;
         *)  echo "Plusieurs imprimantes ont été détectées."
@@ -170,45 +178,39 @@ then
             done
             while test -z "$choix"
             do
-                read -rp "Choisissez le numero qui correspond à l’imprimante que voulez installer : " choix
+                read -rp "Choisissez le numéro qui correspond à l’imprimante que voulez installer : " choix
                 if ! ((choix > 0 && choix <= n_print))
                 then
                     echo "Choix invalide !"
                     unset choix
                 fi
             done
-            modelName="${printer_name[$((choix-1))]}"
-            if [[ ${printer_name[$((choix-1))]} =~ "^réseau" ]]
-            then
-                IP=${printer_IP[$((choix-1))]}
-            else
-                usb="true"
-            fi
+            modelName="${printer_name[$choix-1]}"
+            IP=${printer_IP[$choix-1]}
             ;;
     esac
 #else
     ##########################
      # gestion des arguments #
     ##########################
-    # if test -n "$modelName"; then
-    #     modelName="${modelName^^}"
-    # else
-    #     declare -u modelName=$1
-    # fi
     until test -n "$modelName"
     do
         read -rp 'Entrez le modèle de votre imprimante : ' modelName
     done
 fi
+
 printerName="${modelName//-/}" # ! printer_name != printerName
+# echo " printerName == $printerName"
 #check IP
-if test "$usb" = "true"
+if test "$IP" = "USB" # ???????????????
 then
     echo "Installation en USB."
+    unset IP
 else
     until test -n "$IP"
     do
         read -rp "Voulez-vous configurer votre imprimante pour qu’elle fonctionne en réseau ? [o/N] "
+        echo "$REPLY"
         [[ $REPLY == [YyOo] ]] || break
         if test -n "$2"
         then
@@ -248,7 +250,8 @@ while IFS='=' read -r k v
 do
     printer[$k]=$v
 done < <(wget -qO- "$Url_PrinterInfo" | sed '/\(]\|rpm\|=\)$/d')
-
+echo " sortie du script volontaire !"
+#exit
 #########################################################
  # vérification de variables disponibles dans `printer' #
 #########################################################
@@ -262,7 +265,7 @@ then
     printer[SCANKEY_DRV]="$scanKey_DEB64"
 
     if test -n "$VersionYear"; then
-        if (( VersionYear >= 24 )) && test "${printer[SCANKEY_DRV]}" = 'brscan-skey-0.3.2-0.amd64.deb'
+        if (( VersionYear >= 24 )) && test "${printer[SCANKEY_DRV]}" = "brscan-skey-0.3.2-0.amd64.deb"
         then
             printer[SCANKEY_DRV]="$Scankey_Drv_Deb_Name"
         fi
@@ -277,12 +280,6 @@ fi
 ###########################
  # préparation du système #
 ###########################
-# a remettre le script en service
-# if test -f "$Logfile"; then
-#     Old_Date="$(head -n1 "$Logfile")"
-#     mv -v "$Logfile" "$Logfile"."$Old_Date".log
-# fi
-# echo "$date" >> "$Logfile" # indispensable pour la rotation du log .
 install_pkg "multiarch-support" "lib32stdc++6" "cups"
 
 for d in "/usr/share/cups/model" "/var/spool/lpd"
@@ -327,7 +324,7 @@ done
 for drv in "${printer[@]}"
 do
     if [[ $drv == @($printerName|no|yes) ]]; then continue;fi
-    for addr in "$Url_Pkg"
+    for addr in $Url_Pkg
     do
         if ! test -f "$tmpDir/$drv"
         then
@@ -343,7 +340,7 @@ do
     done
     pkg2install+=( "$tmpDir/$drv" )
 done
-echo "PKG2INSTALL == ${pkg2install[*]}"
+#echo "PKG2INSTALL == ${pkg2install[*]}"
 #installation des pilotes
 if (( ${#pkg2install[*]} == 0 ))
 then
