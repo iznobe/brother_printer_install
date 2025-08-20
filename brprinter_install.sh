@@ -237,24 +237,26 @@ fi
 ###################################################
 # creation $Url_PrinterInfo
 Url_PrinterInfo="$Url_Info/$printerName"
-F_P_fichier_Info="$tmpDir/$printerName.info"
-wget -q "$Url_PrinterInfo" -O "$F_P_fichier_Info"
-if ! test "$(grep PRINTERNAME "$F_P_fichier_Info" | cut -d= -f2)" == "$printerName"
-then
-    errQuit "Les données du fichier info récupéré et le nom de l’imprimante ne correspondent pas."
-elif test "$(grep LNK "$F_P_fichier_Info" | cut -d= -f2)"; then
-    Url_PrinterInfo="$Url_Info/$(grep LNK "$F_P_fichier_Info" | cut -d= -f2)"
-fi
-#echo "$Url_PrinterInfo"
+
 while IFS='=' read -r k v
 do
     printer[$k]=$v
 done < <(wget -qO- "$Url_PrinterInfo" | sed '/\(]\|rpm\|=\)$/d')
-echo " sortie du script volontaire !"
 #exit
 #########################################################
  # vérification de variables disponibles dans `printer' #
 #########################################################
+if test -n "${printer[LNK]}"; then # on telecharge le fichier donné en lien
+    Url_PrinterInfo="$Url_Info/${printer[LNK]}"
+    while IFS='=' read -r k v
+    do
+        printer[$k]=$v
+    done < <(wget -qO- "$Url_PrinterInfo" | sed '/\(]\|rpm\|=\)$/d')
+fi
+if ! test "${printer[PRINTERNAME]}" == "$printerName"
+then
+    errQuit "Les données du fichier info récupéré et le nom de l’imprimante ne correspondent pas."
+fi
 if test -n "${printer[SCANNER_DRV]}"
 then
     install_pkg "libusb-0.1-4:amd64" "libusb-0.1-4:i386" "sane-utils"
@@ -320,27 +322,22 @@ done
 ###############################
  # téléchargement des pilotes #
 ###############################
-#echo " DL DRV TAB == ${printer[*]}"
 for drv in "${printer[@]}"
 do
     if [[ $drv == @($printerName|no|yes) ]]; then continue;fi
-    for addr in $Url_Pkg
-    do
-        if ! test -f "$tmpDir/$drv"
+    if ! test -f "$tmpDir/$drv"
+    then
+        Url_Deb="$Url_Pkg/$drv"
+        if test "$drv" = "${printer[udev_rules]}"
         then
-            Url_Deb="$Url_Pkg/$drv"
-            if test "$drv" = "${printer[udev_rules]}"
-            then
-                Url_Deb="$Udev_Deb_Url/$drv"
-            fi
-            wget -cP "$tmpDir" "$Url_Deb"
-        else
-            break
+            Url_Deb="$Udev_Deb_Url/$drv"
         fi
-    done
+        wget -cP "$tmpDir" "$Url_Deb"
+    fi
     pkg2install+=( "$tmpDir/$drv" )
 done
-#echo "PKG2INSTALL == ${pkg2install[*]}"
+echo "PKG2INSTALL == ${pkg2install[*]}"
+#exit
 #installation des pilotes
 if (( ${#pkg2install[*]} == 0 ))
 then
