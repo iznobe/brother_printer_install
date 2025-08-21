@@ -24,4 +24,6 @@ And , the top , if you want to install a brother printer from another place in y
 <code>
 sudo bash brprinter_install.sh MFC-L2710DW 1 IP_FROM_ANOTHER_PLACE</code>
 example :
-sudo bash brprinter_install.sh MFC-L2710DW 1 1.1.1.1</code> if 1.1.1.1 is the IP of your external brother printer .
+<code>
+sudo bash brprinter_install.sh MFC-L2710DW 1 1.1.1.1</code>
+if 1.1.1.1 is the IP of your external brother printer .
