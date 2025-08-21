@@ -5,6 +5,7 @@
  # infos Brother
  # quelques fonctions
  # quelques vérifications
+ # prérequis pour le script
  # initialisation du tableau associatif `printer'
  # vérification de variables disponibles dans `printer'
  # préparation du système
@@ -15,9 +16,9 @@
 
 shopt -s extglob nullglob globstar
 
-############################
- # définitions de variables
-############################
+#############################
+ # définitions de variables #
+#############################
 if test -f /etc/lsb-release
 then
     . /etc/lsb-release
@@ -42,23 +43,19 @@ declare -A printer
 declare -i err
 declare -a printer_IP printer_name
 
-#################
- # infos Brother
-#################
-# ancienne adresse d' obtention des infos :
-#Url_Info="http://www.brother.com/pub/bsc/linux/infs"
-# nouvelle adresse :
+##################
+ # infos Brother #
+##################
+# Infos
 Url_Info="https://download.brother.com/pub/com/linux/linux/infs"
 # Packages :
 Url_Pkg="https://download.brother.com/pub/com/linux/linux/packages"
-#Url_Pkg2="http://www.brother.com/pub/bsc/linux/packages" # ancienne adresse d'obtention des paquets
 
 Udev_Rules="/lib/udev/rules.d/60-libsane1.rules"
 Udev_Deb_Name="brother-udev-rule-type1-1.0.2-0.all.deb"
 Udev_Deb_Url="http://download.brother.com/welcome/dlf006654"
 Scankey_Drv_Deb_Name="brscan-skey-0.3.4-0.amd64.deb"
-
-#Printer_dl_url="https://support.brother.com/g/b/downloadtop.aspx?c=fr&lang=fr&prod=${printerName}_us_eu_as"
+Printer_dl_url="https://support.brother.com/g/b/downloadtop.aspx?c=fr&lang=fr&prod=${printerName}_us_eu_as"
 
 #######################
  # quelques fonctions #
@@ -89,23 +86,23 @@ install_pkg()
 ###########################
  # quelques vérifications #
 ###########################
-#if test "$DistroName" != "Ubuntu"; then errQuit "La distribution n’est pas Ubuntu ou une des ses variantes officielles."; fi
+if test "$DistroName" != "Ubuntu"; then errQuit "La distribution n’est pas Ubuntu ou une des ses variantes officielles."; fi
 if test "$SHELL" != "/bin/bash"; then errQuit "Shell non compatible. utilisez : bash"; fi
-# if [[ $arch != @(i386|i686|) ]] armv7l
 if test "$arch" != "x86_64"; then errQuit "Système non compatible."; fi
 if ((EUID)); then errQuit "Vous devez lancer le script en root : sudo $0"; fi
 if ! nc -z -w5 'brother.com' 80; then errQuit "le site \"brother.com\" n'est pas joignable."; fi
 
-######################
+#############################
  # prérequis pour le script #
-######################
+#############################
 # a remettre le script en service
 # if test -f "$Logfile"; then
 #     Old_Date="$(head -n1 "$Logfile")"
 #     mv -v "$Logfile" "$Logfile"."$Old_Date".log
 # fi
 # echo "$date" >> "$Logfile" # indispensable pour la rotation du log .
-#apt-get update -qq
+apt-get update -qq
+sleep 1
 # script : "wget" "nmap" "libxml2-utils" " gawk" "avahi-utils"
 # imprimantes : "multiarch-support" "lib32stdc++6" "cups"
 # scanner : "libusb-0.1-4:amd64" "libusb-0.1-4:i386" "sane-utils"
@@ -137,11 +134,6 @@ then
     ##### VERSION AVAHI-BROWSE #####
     mapfile -t printer_IP < <(avahi-browse -d local _http._tcp -tkrp | gawk -F';' '/^=/ && /IPv4/ && /Brother/ && !/USB/ {print $8}')
     mapfile -t printer_name < <(avahi-browse -d local _http._tcp -tkrp | gawk -F';' '/^=/ && /IPv4/ && /Brother/ && !/USB/ {sub(/Brother\\032/,"",$4); sub(/\\032.*/,"",$4); print $4}')
-    ##### VERSION AVAHI-BROWSE #####
-
-    #echo "printer_name RESULT ==
-    #TAB printer_IP == ${printer_IP[*]}
-    #TAB printer_name == ${printer_name[*]}"
 
     # USB_printer_name= ???
     if lsusb | grep -q 04f9:
@@ -153,9 +145,6 @@ then
             printer_IP+=("USB")
         done
     fi
-    #echo "printer_name ==
-    #${#printer_name[*]} ,
-    #${printer_name[*]}"
 
     case ${#printer_name[*]} in
         0) echo "Aucune imprimante détectée !
@@ -190,7 +179,6 @@ then
             IP=${printer_IP[$choix-1]}
             ;;
     esac
-#else
     ##########################
      # gestion des arguments #
     ##########################
@@ -208,10 +196,8 @@ printerName="${modelName//-/}" # ! printer_name != printerName
 #check IP
 if test "$IP" = "USB"
 then
-    echo "Installation en USB."
     unset IP
 else
-    echo "Installation en réseau."
     until test -n "$IP"
     do
         if test -n "$2"; then
@@ -232,15 +218,19 @@ else
             if (( ${#ip[*]} != 4 )) || ((err)) || ! ping -qc2 "$IP"; then
                 err=0
                 unset IP
-                #read -rp "Adresse erronée , re-donner l'IP de votre imprimante : " IP
                 echo "Adresse erronée !"
             fi
         fi
     done
+    
+    if test -v "$IP"
+    then
+        echo "Installation en réseau."
+    else
+        echo "Installation en USB."
+    fi
 fi
 
-echo "IP == $IP"
-exit
 ###################################################
  # initialisation du tableau associatif `printer' #
 ###################################################
@@ -251,13 +241,13 @@ while IFS='=' read -r k v
 do
     printer[$k]=$v
 done < <(wget -qO- "$Url_PrinterInfo" | sed '/\(]\|rpm\|=\)$/d')
-echo "Tab printer == ${printer[*]}"           
-#exit
+echo "Tab printer == ${printer[*]}"
+
 #########################################################
  # vérification de variables disponibles dans `printer' #
 #########################################################
 if test -n "${printer[LNK]}"; then # on telecharge le fichier donné en lien
-    Url_PrinterInfo="$Url_Info/${printer[LNK]}"
+    Url_PrinterInfo="$Url_Info/${printer[LNK]}" # ???? 
     while IFS='=' read -r k v
     do
         printer[$k]=$v
@@ -288,7 +278,7 @@ else
     err+="1"
     echo "Pas de pilote pour le scanner."
 fi
-exit
+
 ###########################
  # préparation du système #
 ###########################
@@ -347,7 +337,6 @@ do
     pkg2install+=( "$tmpDir/$drv" )
 done
 echo "PKG2INSTALL == ${pkg2install[*]}"
-#exit
 #installation des pilotes
 if (( ${#pkg2install[*]} == 0 ))
 then
@@ -363,16 +352,15 @@ fi
 for drv in "PRN_CUP_DEB" "PRN_DRV_DEB"
 do
     pkg=${printer[$drv]}
-    #echo "pkg == $pkg"
     if test -n "$pkg" -a -f "$tmpDir/$pkg"
     then
-        while read -rd '' fileName # avec ou sans option " r " ?
+        while read -rd '' fileName
         do
             PPDs+=( "$fileName" )
         done < <(dpkg --contents "$tmpDir/$pkg" | gawk 'BEGIN{ORS="\0"} /ppd/{sub(".","",$NF); print $NF}')
     fi
 done
-#echo "PPDs == ${PPDs[*]}"
+
 if test -z "$Ppd_File"
 then
     PPDs=( /usr/share/cups/model/**/*brother*@($printerName|$modelName)*.ppd )
@@ -385,7 +373,7 @@ case ${#PPDs[*]} in
         Ppd_File=${PPDs[0]}
         ;;
     *)  err+="1"
-        echo "more than one ppd"
+        echo "plus d'un fichier ppd trouvé , utilisation du 1er."
         Ppd_File=${PPDs[0]}
         ;;
 esac
