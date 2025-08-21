@@ -113,11 +113,13 @@ then
 	mkdir -pv "$tmpDir"
 fi
 
+##########################
+ # gestion des arguments #
+##########################
 if test -z "$modelName"
 then
-	##########################
-	 # DETECTION AUTOMATIQUE #
-	##########################
+
+# DETECTION AUTOMATIQUE #
 	# NET_printer_name= ???
 	##### VERSION NMAP #####
 	# my_IP="$(hostname -I | cut -d ' ' -f1)"
@@ -180,9 +182,8 @@ then
 			IP=${printer_IP[$choix-1]}
 			;;
 	esac
-	##########################
-	 # gestion des arguments #
-	##########################
+# FIN DETECTION AUTOMATIQUE
+
 	until test -n "$modelName"
 	do
 		read -rp 'Entrez le modèle de votre imprimante : ' modelName
