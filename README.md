@@ -19,3 +19,9 @@ sudo bash brprinter_install.sh   PRINTER_NAME   1   PRINTER_IP</code>
 For example , if in your box you have put 192.168.1.18 as fixed IP for your printer :
 <code>
 sudo bash brprinter_install.sh MFC-L2710DW 1 192.168.1.18</code>
+
+And , the top , if you want to install a brother printer from another place in your computer , you can do :
+<code>
+sudo bash brprinter_install.sh MFC-L2710DW 1 IP_FROM_ANOTHER_PLACE</code>
+example :
+sudo bash brprinter_install.sh MFC-L2710DW 1 1.1.1.1</code> if 1.1.1.1 is the IP of your external brother printer .
