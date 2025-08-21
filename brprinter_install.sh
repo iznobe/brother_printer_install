@@ -197,6 +197,7 @@ printerName="${modelName//-/}" # ! printer_name != printerName
 if test "$IP" = "USB"
 then
     unset IP
+    echo "Installation en USB."
 else
     until test -n "$IP"
     do
@@ -223,7 +224,7 @@ else
         fi
     done
     
-    if test -v "$IP"
+    if test -n "$IP"
     then
         echo "Installation en réseau."
     else
@@ -337,7 +338,7 @@ do
     pkg2install+=( "$tmpDir/$drv" )
 done
 echo "PKG2INSTALL == ${pkg2install[*]}"
-#installation des pilotes
+# installation des pilotes
 if (( ${#pkg2install[*]} == 0 ))
 then
     errQuit "Rien à installer."
