@@ -40,6 +40,7 @@ libDir="/usr/lib/$arch-linux-gnu"
 
 declare -A printer
 declare -i err
+declare -a printer_IP printer_name
 
 #################
  # infos Brother
@@ -90,7 +91,6 @@ install_pkg()
 ###########################
 #if test "$DistroName" != "Ubuntu"; then errQuit "La distribution n’est pas Ubuntu ou une des ses variantes officielles."; fi
 if test "$SHELL" != "/bin/bash"; then errQuit "Shell non compatible. utilisez : bash"; fi
-#if test "$arch" != "armv7l"; then errQuit "Système non compatible."; fi
 # if [[ $arch != @(i386|i686|) ]] armv7l
 if test "$arch" != "x86_64"; then errQuit "Système non compatible."; fi
 if ((EUID)); then errQuit "Vous devez lancer le script en root : sudo $0"; fi
@@ -105,11 +105,11 @@ if ! nc -z -w5 'brother.com' 80; then errQuit "le site \"brother.com\" n'est pas
 #     mv -v "$Logfile" "$Logfile"."$Old_Date".log
 # fi
 # echo "$date" >> "$Logfile" # indispensable pour la rotation du log .
-apt-get update -qq
-# script : "wget" "nmap" "libxml2-utils" " gawk"
+#apt-get update -qq
+# script : "wget" "nmap" "libxml2-utils" " gawk" "avahi-utils"
 # imprimantes : "multiarch-support" "lib32stdc++6" "cups"
 # scanner : "libusb-0.1-4:amd64" "libusb-0.1-4:i386" "sane-utils"
-install_pkg "wget" "nmap" "libxml2-utils" "gawk"
+install_pkg "wget" "nmap" "libxml2-utils" "gawk" "avahi-utils"
 
 if ! test -d "$tmpDir"
 then
@@ -122,7 +122,7 @@ then
      # DETECTION AUTOMATIQUE #
     ##########################
     # NET_printer_name= ???
-    declare -a printer_IP printer_name
+    ##### VERSION NMAP #####
     # my_IP="$(hostname -I | cut -d ' ' -f1)"
     # mapfile -t printer_IP < <(nmap -sn -oG - "$my_IP"/24 | gawk 'tolower($3) ~ /brother/{print $2}')
     # #printer_IP=( $(nmap -sn -oG - "$my_IP"/24 | gawk 'tolower($3) ~ /brother/{print $2}') )
@@ -179,6 +179,7 @@ then
             while test -z "$choix"
             do
                 read -rp "Choisissez le numéro qui correspond à l’imprimante que voulez installer : " choix
+                echo "$choix"
                 if ! ((choix > 0 && choix <= n_print))
                 then
                     echo "Choix invalide !"
@@ -201,37 +202,45 @@ fi
 
 printerName="${modelName//-/}" # ! printer_name != printerName
 # echo " printerName == $printerName"
+# si on a une IP detectée
+# ou bien si on a une IP en argument => controle
+# sinon on demande l ' IP => controle
 #check IP
-if test "$IP" = "USB" # ???????????????
+if test "$IP" = "USB"
 then
     echo "Installation en USB."
     unset IP
 else
+    echo "Installation en réseau."
     until test -n "$IP"
     do
-        read -rp "Voulez-vous configurer votre imprimante pour qu’elle fonctionne en réseau ? [o/N] "
-        echo "$REPLY"
-        [[ $REPLY == [YyOo] ]] || break
-        if test -n "$2"
-        then
+        if test -n "$2"; then
             IP=$2
             shift $#
         else
+            read -rp "Voulez-vous configurer votre imprimante pour qu’elle fonctionne en réseau ? [o/N] "
+            echo "$REPLY"
+            [[ $REPLY == [YyOo] ]] || break
+
             read -rp "Entrez l’adresse IP de votre imprimante : " IP
         fi
-        IFS='.' read -ra ip <<< "$IP"
-        for i in "${ip[@]}"
-        do
-            ((n++ ? i >=0 && i<=255 : i>0 && i<=255)) || err+="1"
-        done
-        if (( ${#ip[*]} != 4 )) || ((err)) || ! ping -qc2 "$IP"
-        then
-            err=0
-            unset IP
+        if test -n "$IP"; then
+            IFS='.' read -ra ip <<< "$IP"
+            for i in "${ip[@]}"; do
+                ((n++ ? i >=0 && i<=255 : i>0 && i<=255)) || err+="1"
+            done
+            if (( ${#ip[*]} != 4 )) || ((err)) || ! ping -qc2 "$IP"; then
+                err=0
+                unset IP
+                #read -rp "Adresse erronée , re-donner l'IP de votre imprimante : " IP
+                echo "Adresse erronée !"
+            fi
         fi
     done
 fi
 
+echo "IP == $IP"
+exit
 ###################################################
  # initialisation du tableau associatif `printer' #
 ###################################################
@@ -242,6 +251,7 @@ while IFS='=' read -r k v
 do
     printer[$k]=$v
 done < <(wget -qO- "$Url_PrinterInfo" | sed '/\(]\|rpm\|=\)$/d')
+echo "Tab printer == ${printer[*]}"           
 #exit
 #########################################################
  # vérification de variables disponibles dans `printer' #
@@ -278,7 +288,7 @@ else
     err+="1"
     echo "Pas de pilote pour le scanner."
 fi
-
+exit
 ###########################
  # préparation du système #
 ###########################
