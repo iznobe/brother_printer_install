@@ -454,3 +454,4 @@ then
 			;;
 	esac
 fi
+chown -R "$User": "$tmpDir" "$Logfile"
