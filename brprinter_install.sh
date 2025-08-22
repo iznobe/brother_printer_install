@@ -113,12 +113,12 @@ then
 	mkdir -pv "$tmpDir"
 fi
 
+##########################
+ # gestion des arguments #
+##########################
 if test -z "$modelName"
 then
-	##########################
-	 # DETECTION AUTOMATIQUE #
-	##########################
-	##### VERSION AVAHI-BROWSE #####
+	# DETECTION AUTOMATIQUE ##### VERSION AVAHI-BROWSE #####
     mapfile -t printers < <(avahi-browse -d local _http._tcp -tkrp | gawk -F';' '/^=/ && /IPv4/ && /Brother/')
     for p in "${printers[@]}"
     do
@@ -142,7 +142,7 @@ then
 			;;
 		*)  echo "Plusieurs imprimantes ont été détectées."
 			# il faut presenter sous forme de liste les éléments recupérés :
-			# modele du materriel : IP ou USB
+			# modele du materiel : IP ou USB
 			# et demander à l' utilisateur de choisir un numero dans cette liste
 			n_print=$(("${#printer_name[@]}"))
 			for n in "${!printer_name[@]}"
@@ -163,9 +163,7 @@ then
 			IP=${printer_IP[$choix-1]}
 			;;
 	esac
-	##########################
-	 # gestion des arguments #
-	##########################
+
 	until test -n "$modelName"
 	do
 		read -rp 'Entrez le modèle de votre imprimante : ' modelName
