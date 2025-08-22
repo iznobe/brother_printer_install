@@ -66,7 +66,7 @@ errQuit()
 	exit 1
 }
 verif_lien()
-{ # pour faire un boucle, suffit-il vérifier que le nombre d'arguments est pair ?
+{
 	local lien=$1 cible=$2
 	if ! test -L "$lien"
 	then
@@ -76,7 +76,7 @@ verif_lien()
 install_pkg()
 {
 	for pkg do
-		if ! dpkg-query -f '${binary:Package}\n' -W "$pkg" &>/dev/null
+		if ! dpkg-query -l "$pkg" | grep -q "^[hi]i"
 		then
 			apt-get install -qq "$pkg"
 		fi
@@ -118,22 +118,8 @@ then
 	##########################
 	 # DETECTION AUTOMATIQUE #
 	##########################
-	# NET_printer_name= ???
-	##### VERSION NMAP #####
-	# my_IP="$(hostname -I | cut -d ' ' -f1)"
-	# mapfile -t printer_IP < <(nmap -sn -oG - "$my_IP"/24 | gawk 'tolower($3) ~ /brother/{print $2}')
-	# #printer_IP=( $(nmap -sn -oG - "$my_IP"/24 | gawk 'tolower($3) ~ /brother/{print $2}') )
-	# #echo "${printer_IP[*]}"
-	# for p_ip in "${printer_IP[@]}"; do
-	#     if wget -E "$p_ip" -O "$tmpDir/index.html"; then
-	#         printer_name+=( "$(xmllint --html --xpath '//title/text()' "$tmpDir/index.html" 2>/dev/null | cut -d ' ' -f2)" )
-	#         #echo "printer_name == ${printer_name[*]}"
-	#     fi
-	# done
-
 	##### VERSION AVAHI-BROWSE #####
     mapfile -t printers < <(avahi-browse -d local _http._tcp -tkrp | gawk -F';' '/^=/ && /IPv4/ && /Brother/')
-    #echo "printers ==     ${printers[*]}"
     for p in "${printers[@]}"
     do
         printer_name+=( "$(echo "$p" | grep -oP 'Brother\\032\K[^\\]+')" )
@@ -143,9 +129,6 @@ then
             printer_IP+=( "$(echo "$p" | grep -oP '\.local\;\K[^\;]+')" )
         fi
     done
-    echo "printer_name RESULT ==
-    TAB printer_IP == ${printer_IP[*]}
-    TAB printer_name == ${printer_name[*]}"
 
 	case ${#printer_name[*]} in
 		0) echo "Aucune imprimante détectée !
