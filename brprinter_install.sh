@@ -113,24 +113,39 @@ then
 	mkdir -pv "$tmpDir"
 fi
 
-##########################
- # gestion des arguments #
-##########################
 if test -z "$modelName"
 then
-
-# DETECTION AUTOMATIQUE #
-	##### VERSION AVAHI-BROWSE ( plus rapide et plus simple que nmap )#####
+	##########################
+	 # DETECTION AUTOMATIQUE #
+	##########################
 	# NET_printer_name= ???
-	mapfile -t printer_IP < <(avahi-browse -d local _http._tcp -tkrp | gawk -F';' '/^=/ && /IPv4/ && /Brother/ && !/USB/ {print $8}')
-	mapfile -t printer_name < <(avahi-browse -d local _http._tcp -tkrp | gawk -F';' '/^=/ && /IPv4/ && /Brother/ && !/USB/ {sub(/Brother\\032/,"",$4); sub(/\\032.*/,"",$4); print $4}')
+	##### VERSION NMAP #####
+	# my_IP="$(hostname -I | cut -d ' ' -f1)"
+	# mapfile -t printer_IP < <(nmap -sn -oG - "$my_IP"/24 | gawk 'tolower($3) ~ /brother/{print $2}')
+	# #printer_IP=( $(nmap -sn -oG - "$my_IP"/24 | gawk 'tolower($3) ~ /brother/{print $2}') )
+	# #echo "${printer_IP[*]}"
+	# for p_ip in "${printer_IP[@]}"; do
+	#     if wget -E "$p_ip" -O "$tmpDir/index.html"; then
+	#         printer_name+=( "$(xmllint --html --xpath '//title/text()' "$tmpDir/index.html" 2>/dev/null | cut -d ' ' -f2)" )
+	#         #echo "printer_name == ${printer_name[*]}"
+	#     fi
+	# done
 
-	# USB_printer_name= ???
-    mapfile -t printer_usb < <(avahi-browse -d local _http._tcp -tkrp | gawk -F';' '/^=/ && /IPv4/ && /Brother/ && /USB/ {sub(/Brother\\032/,"",$4); sub(/\\032.*/,"",$4); print $4}')
-    for p_usb in "${printer_usb[@]}"
-	do
-		printer_IP+=("USB")
-	done
+	##### VERSION AVAHI-BROWSE #####
+    mapfile -t printers < <(avahi-browse -d local _http._tcp -tkrp | gawk -F';' '/^=/ && /IPv4/ && /Brother/')
+    #echo "printers ==     ${printers[*]}"
+    for p in "${printers[@]}"
+    do
+        printer_name+=( "$(echo "$p" | grep -oP 'Brother\\032\K[^\\]+')" )
+        if [[ "$p" =~ '=;lo;' ]]; then # USB
+            printer_IP+=( "USB" )
+        else # reseau
+            printer_IP+=( "$(echo "$p" | grep -oP '\.local\;\K[^\;]+')" )
+        fi
+    done
+    echo "printer_name RESULT ==
+    TAB printer_IP == ${printer_IP[*]}
+    TAB printer_name == ${printer_name[*]}"
 
 	case ${#printer_name[*]} in
 		0) echo "Aucune imprimante détectée !
@@ -165,8 +180,9 @@ then
 			IP=${printer_IP[$choix-1]}
 			;;
 	esac
-# FIN DETECTION AUTOMATIQUE
-
+	##########################
+	 # gestion des arguments #
+	##########################
 	until test -n "$modelName"
 	do
 		read -rp 'Entrez le modèle de votre imprimante : ' modelName
