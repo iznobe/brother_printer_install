@@ -120,34 +120,17 @@ if test -z "$modelName"
 then
 
 # DETECTION AUTOMATIQUE #
-	# NET_printer_name= ???
-	##### VERSION NMAP #####
-	# my_IP="$(hostname -I | cut -d ' ' -f1)"
-	# mapfile -t printer_IP < <(nmap -sn -oG - "$my_IP"/24 | gawk 'tolower($3) ~ /brother/{print $2}')
-	# #printer_IP=( $(nmap -sn -oG - "$my_IP"/24 | gawk 'tolower($3) ~ /brother/{print $2}') )
-	# #echo "${printer_IP[*]}"
-	# for p_ip in "${printer_IP[@]}"; do
-	#     if wget -E "$p_ip" -O "$tmpDir/index.html"; then
-	#         printer_name+=( "$(xmllint --html --xpath '//title/text()' "$tmpDir/index.html" 2>/dev/null | cut -d ' ' -f2)" )
-	#         #echo "printer_name == ${printer_name[*]}"
-	#     fi
-	# done
-
 	##### VERSION AVAHI-BROWSE ( plus rapide et plus simple que nmap )#####
+	# NET_printer_name= ???
 	mapfile -t printer_IP < <(avahi-browse -d local _http._tcp -tkrp | gawk -F';' '/^=/ && /IPv4/ && /Brother/ && !/USB/ {print $8}')
 	mapfile -t printer_name < <(avahi-browse -d local _http._tcp -tkrp | gawk -F';' '/^=/ && /IPv4/ && /Brother/ && !/USB/ {sub(/Brother\\032/,"",$4); sub(/\\032.*/,"",$4); print $4}')
 
 	# USB_printer_name= ???
-	# mapfile -t printer_IP < <(avahi-browse -d local _http._tcp -tkrp | gawk -F';' '/^=/ && /IPv4/ && /Brother/ && /USB/ {sub(/Brother\\032/,"",$4); sub(/\\032.*/,"",$4); print $4}')
-	if lsusb | grep -q 04f9:
-	then
-		mapfile -t printer_usb < <(lsusb | gawk '/04f9:/ {print $10}')
-		for p_usb in "${printer_usb[@]}"
-		do
-			printer_name+=( "$p_usb" )
-			printer_IP+=("USB")
-		done
-	fi
+    mapfile -t printer_usb < <(avahi-browse -d local _http._tcp -tkrp | gawk -F';' '/^=/ && /IPv4/ && /Brother/ && /USB/ {sub(/Brother\\032/,"",$4); sub(/\\032.*/,"",$4); print $4}')
+    for p_usb in "${printer_usb[@]}"
+	do
+		printer_IP+=("USB")
+	done
 
 	case ${#printer_name[*]} in
 		0) echo "Aucune imprimante détectée !
