@@ -52,7 +52,7 @@ control_ip() {
 install_pkg() {
 	for pkg do
 		log "Recherche du paquet : ' $pkg ' sur votre système"
-		if dpkg-query -f '${binary:Package}\n' -W "$pkg" &>/dev/null; then
+		if dpkg-query -l "$pkg" | grep -q "^[hi]i"; then
 			echo " - Paquet ' $pkg ' deja installé" &>> "$Logfile"
 			log_action_end_msg 0
 		else
