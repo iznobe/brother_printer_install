@@ -89,17 +89,15 @@ usage()
 }
 errQuit()
 {
-    chown -R "$user": "$tmpDir" "$logFile"
+    test -d "$tmpDir" && chown -R "$user": "$tmpDir"
+    test -f "$logFile" && chown "$user": "$logFile"
     >&2 echo -e "\\033[1;31m Erreur : $* \\033[0;0m"
     exit 1
 }
 verif_lien()
 {
     local lien=$1 cible=$2
-    if ! test -L "$lien"
-    then
-        ln -s "$cible" "$lien"
-    fi
+    ! test -L "$lien" && ln -s "$cible" "$lien"
 }
 install_pkg()
 {
@@ -124,8 +122,8 @@ log() {
         log_action_begin_msg "$message"
         log2file_o "$message"
     else
-        if test "$2" == "Blue"; then color="\\033[1;34m";fi
-        if test "$2" == "Red"; then color="\\033[1;31m";fi
+        test "$2" == "Blue" && color="\\033[1;34m"
+        test "$2" == "Red" && color="\\033[1;31m"
             echo -e "$color $message \\033[0;0m" # Resetcolor
             echo -e "# $message" &>> "$logFile"
     fi
@@ -177,16 +175,16 @@ then
     usage
     errQuit "Erreur : trop d’arguments ou argument manquant dans une option."
 fi
-
+distroName="nn"
 ###########################
  # quelques vérifications #
 ###########################
-if test -f /lib/lsb/init-functions; then . /lib/lsb/init-functions; else errQuit "/lib/lsb/init-functions manquant.";fi
-if test "$distroName" != "Ubuntu"; then errQuit "La distribution n’est pas Ubuntu ou une des ses variantes officielles.";fi
-if test "$SHELL" != "/bin/bash"; then errQuit "Shell non compatible. utilisez : bash";fi
-if test "$arch" != "x86_64"; then errQuit "Système non compatible.";fi
-if test -z "$versionYear"; then errQuit "Impossible d’évaluer la version de la distribution.";fi
-if ((EUID)); then errQuit "Vous devez lancer le script en root : sudo $0";fi
+test -f /lib/lsb/init-functions && . /lib/lsb/init-functions || errQuit "/lib/lsb/init-functions manquant."
+test "$distroName" != "Ubuntu" && errQuit "La distribution n’est pas Ubuntu ou une des ses variantes officielles."
+test "$SHELL" != "/bin/bash" && errQuit "Shell non compatible. utilisez : bash"
+test "$arch" != "x86_64" errQuit "Système non compatible."
+test -z "$versionYear" && errQuit "Impossible d’évaluer la version de la distribution."
+((EUID)) && errQuit "Vous devez lancer le script en root : sudo $0"
 
 #############################
  # prérequis pour le script #
@@ -207,9 +205,7 @@ log "   # Ubuntu Codename : $codeName
         # Fichier journal : $logFile" "Blue"
 
 log "verification de la connecion au site Brother"
-if nc -z -w3 'brother.com' 80;then
-log_action_end_msg $?
-else errQuit "Site brother injoignable."; fi
+nc -z -w3 'brother.com' 80 && log_action_end_msg $? || errQuit "Site brother injoignable."
 log "Mise à jour des paquets"
 apt-get update -qq
 log_action_end_msg $?
@@ -315,7 +311,7 @@ else
     fi
 fi
 
-if test -z "$IP"; then IP="Aucune"; fi
+test -z "$IP" && IP="Aucune"
 urlPrinterDl="https://support.brother.com/g/b/downloadtop.aspx?c=fr&lang=fr&prod=${printerName}_us_eu_as"
 urlPrinterInfo="$urlInfo/$printerName"
 log "    # Modèle de l'imprimante : $modelName
@@ -323,7 +319,7 @@ log "    # Modèle de l'imprimante : $modelName
      # Adresse IP : $IP
      # Fichier d'informations : $urlPrinterInfo
      # page de telechargement des pilotes : $urlPrinterDl" "Blue"
-if test "$IP" = "Aucune"; then unset IP;fi
+test "$IP" = "Aucune" && unset IP
 
 ###################################################
  # initialisation du tableau associatif `t_printer' #
@@ -345,10 +341,7 @@ if test -n "${t_printer[LNK]}"; then # on telecharge le fichier donné en lien
         t_printer[$k]=$v
     done < <(wget -qO- "$urlPrinterInfo" | sed '/\(]\|rpm\|=\)$/d')
 fi
-if ! test "${t_printer[PRINTERNAME]}" == "$printerName"
-then
-    errQuit "Les données du fichier info récupéré et le nom de l’imprimante ne correspondent pas."
-fi
+test "${t_printer[PRINTERNAME]}" != "$printerName" && errQuit "Les données du fichier info récupéré et le nom de l’imprimante ne correspondent pas."
 if test -n "${t_printer[SCANNER_DRV]}"
 then
     install_pkg "libusb-0.1-4:amd64" "libusb-0.1-4:i386" "sane-utils"
@@ -387,10 +380,7 @@ for i in \
     FAX-{18{15,20,35,40}C,19{2,4}0CN,2440C} \
     MFC-{21{0,5}C,32{2,4}0C,33{2,4}0CN,3420C,3820CN,4{1,2}0CN,425CN,5440CN,5840CN,620CN,640CW,820CW}
 do
-    if test "$i" = "$modelName"
-    then
-        install_pkg "csh"
-    fi
+    test "$i" = "$modelName" && install_pkg "csh"
 done
 for i in \
     DCP-{1{0,4}00,80{{20,25D},{40,45D},{60,65DN}}} \
@@ -414,14 +404,11 @@ done
 ###############################
 for drv in "${t_printer[@]}"
 do
-    if [[ $drv == @($printerName|no|yes) ]]; then continue;fi
+    [[ $drv == @($printerName|no|yes) ]] && continue
     if ! test -f "$tmpDir/$drv"
     then
         Url_Deb="$urlPkg/$drv"
-        if test "$drv" = "${t_printer[udev_rules]}"
-        then
-            Url_Deb="$urlUdevDeb/$drv"
-        fi
+        test "$drv" = "${t_printer[udev_rules]}" && Url_Deb="$urlUdevDeb/$drv"
         log "Telechargement du pilote : $drv"
         wget -cP "$tmpDir" "$Url_Deb"
         log_action_end_msg $?
