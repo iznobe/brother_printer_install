@@ -7,8 +7,7 @@ sudo su -c "bash <(wget -qO- https://raw.githubusercontent.com/iznobe/brother_pr
 if you use your brother printer connected via USB , you can do like this :
 <code>
 wget https://raw.githubusercontent.com/iznobe/brother_printer_install/refs/heads/main/brprinter_install.sh
-chmod +x brprinter_install.sh
-sudo bash brprinter_install.sh   PRINTER_NAME   0</code>
+sudo ./brprinter_install.sh -m PRINTER_NAME</code>
 
 if you use your printer on network you can give to script argument this way :
 <code>
