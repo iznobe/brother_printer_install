@@ -191,11 +191,10 @@ if ((EUID)); then errQuit "Vous devez lancer le script en root : sudo $0";fi
 #############################
  # prérequis pour le script #
 #############################
-# a remettre le script en service
-# if test -f "$logFile"; then
-#     Old_Date="$(head -n1 "$logFile")"
-#     mv -v "$logFile" "$logFile"."$Old_Date".log
-# fi
+if test -f "$logFile"; then
+    Old_Date="$(head -n1 "$logFile")"
+    mv -v "$logFile" "$logFile"."$Old_Date".log
+fi
 echo "$date" > "$logFile" # indispensable pour la rotation du log .
 
 log "   # Ubuntu Codename : $codeName
