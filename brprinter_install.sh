@@ -3,9 +3,13 @@
 # ecrit par @demonipuch .
 # re-ecrit par ubuntu team : https://forum.ubuntu-fr.org/viewtopic.php?id=2091835&p=2
 
-# todo :
-# verification de l' installation des dependances / paquets sur version ubuntu 24.04 et superieures
-# multiarch-support , libsane etc ...
+# ----------------------------------------------------------------------------
+# "LICENCE BEERWARE" (Révision 42):
+# <iznobe@forum.ubuntu-fr.org> a créé ce fichier. Tant que vous conservez cet avertissement,
+# vous pouvez faire ce que vous voulez de ce truc. Si on se rencontre un jour et
+# que vous pensez que ce truc vaut le coup, vous pouvez me payer une bière en
+# retour.
+# ----------------------------------------------------------------------------
 
 
 if test -f /lib/lsb/init-functions; then . /lib/lsb/init-functions;fi
