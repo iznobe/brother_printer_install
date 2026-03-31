@@ -5,7 +5,7 @@ il suffira ensuite de répondre aux questions.</br>
 
 Si votre imprimante est connectée en USB , il est possible de faire comme ça :</br>
 telecharger d ' abord le script :</br>
-<code>wget https://raw.githubusercontent.com/iznobe/brother_printer_install/refs/heads/Watael/brprinter_install.sh</code></br>
+<code>wget https://raw.githubusercontent.com/iznobe/brother_printer_install/refs/heads/buntuteam/brprinter_install.sh</code></br>
 executer le script en lui donnant le nom de votre imprimante en parametre :</br>
 <code>sudo  bash brprinter_install.sh -m PRINTER_NAME</code></br>
 remplacer " PRINTER_NAME " par le vrai nom du materiel , par exemple : mfc-2710dw .</br>
@@ -26,12 +26,12 @@ example :</br>
 <code>sudo su -c "bash <(wget -qO- https://raw.githubusercontent.com/iznobe/brother_printer_install/refs/heads/main/brprinter_install.sh)"</code></br>
 
 if you use your brother printer connected via USB , you can do like this :</br>
-<code>wget https://raw.githubusercontent.com/iznobe/brother_printer_install/refs/heads/Watael/brprinter_install.sh</br>
+<code>wget https://raw.githubusercontent.com/iznobe/brother_printer_install/refs/heads/buntuteam/brprinter_install.sh.sh</br>
 sudo  bash brprinter_install.sh -m PRINTER_NAME</code></br>
 replace " brprinter_install.sh " by your real device name for example : mfc-2710dw .</br>
 
 if you use your printer on network you can give to script argument this way :</br>
-<code>wget https://raw.githubusercontent.com/iznobe/brother_printer_install/refs/heads/Watael/brprinter_install.sh
+<code>wget https://raw.githubusercontent.com/iznobe/brother_printer_install/refs/heads/buntuteam/brprinter_install.sh
 sudo bash brprinter_install.sh -m PRINTER_NAME -i PRINTER_IP</code></br>
 replace " PRINTER_NAME " by your real device name for example : mfc-2710dw , and " PRINTER_IP " by your real <b>FIXED</b> device IP .</br>
 
