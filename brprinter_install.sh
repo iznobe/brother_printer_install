@@ -178,7 +178,7 @@ fi
 ###########################
  # quelques vérifications #
 ###########################
-test -f /lib/lsb/init-functions && . /lib/lsb/init-functions || errQuit "/lib/lsb/init-functions manquant."
+if test -f /lib/lsb/init-functions; then . /lib/lsb/init-functions; else errQuit "/lib/lsb/init-functions manquant.";fi
 test "$distroName" != "Ubuntu" && errQuit "La distribution n’est pas Ubuntu ou une des ses variantes officielles."
 test "$SHELL" != "/bin/bash" && errQuit "Shell non compatible. utilisez : bash"
 test "$arch" != "x86_64" && errQuit "Système non compatible."
@@ -189,10 +189,10 @@ test -z "$versionYear" && errQuit "Impossible d’évaluer la version de la dist
  # prérequis pour le script #
 #############################
 # a remettre le script en service
-# if test -f "$logFile"; then
-#     Old_Date="$(head -n1 "$logFile")"
-#     mv -v "$logFile" "$logFile"."$Old_Date".log
-# fi
+ if test -f "$logFile"; then
+     Old_Date="$(head -n1 "$logFile")"
+     mv -v "$logFile" "$logFile"."$Old_Date".log
+ fi
 echo "$date" > "$logFile" # indispensable pour la rotation du log .
 
 log "   # Ubuntu Codename : $codeName
@@ -204,7 +204,7 @@ log "   # Ubuntu Codename : $codeName
         # Fichier journal : $logFile" "Blue"
 
 log "verification de la connecion au site Brother"
-nc -z -w3 'brother.com' 80 && log_action_end_msg $? || errQuit "Site brother injoignable."
+if nc -z -w3 'brother.com' 80; then log_action_end_msg $?; else errQuit "Site brother injoignable.";fi
 log "Mise à jour des paquets"
 apt-get update -qq
 log_action_end_msg $?
