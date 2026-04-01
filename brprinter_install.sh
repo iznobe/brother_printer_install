@@ -209,7 +209,7 @@ nc -z -w3 'brother.com' 80 && log_action_end_msg $? || errQuit "Site brother inj
 log "Mise à jour des paquets"
 apt-get update -qq
 log_action_end_msg $?
-install_pkg "wget" "libxml2-utils" "gawk" "avahi-utils"
+install_pkg "wget" "curl" "libxml2-utils" "gawk" "avahi-utils"
 
 if ! test -d "$tmpDir"
 then
