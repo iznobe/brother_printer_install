@@ -205,6 +205,7 @@ log "   # Ubuntu Codename : $codeName
 
 log "verification de la connecion au site Brother"
 if nc -z -w3 'brother.com' 80; then log_action_end_msg $?; else errQuit "Site brother injoignable.";fi
+
 log "Mise à jour des paquets"
 apt-get update -qq
 log_action_end_msg $?
@@ -222,6 +223,7 @@ then # DÉTECTION AUTOMATIQUE ##### VERSION AVAHI-BROWSE #####
     for p in "${t_printers[@]}"
     do
         t_printer_name+=( "$(echo "$p" | grep -oP 'Brother\\032\K[^\\]+')" )
+
         if [[ "$p" =~ '=;lo;' ]]; then # USB
             t_printer_IP+=( "USB" )
         else # reseau
@@ -238,6 +240,7 @@ then # DÉTECTION AUTOMATIQUE ##### VERSION AVAHI-BROWSE #####
         1)  log "Une seule imprimante détectée."
             modelName=${t_printer_name[0]} # ! t_printer_name != printerName
             IP=${t_printer_IP[0]}
+            echo "$modelName ====>>>> $IP"
             log_action_end_msg 0
             # pas besoin de poser de question, il ne reste plus qu’à installer
             ;;
