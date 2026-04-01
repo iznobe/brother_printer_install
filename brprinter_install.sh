@@ -181,7 +181,7 @@ fi
 test -f /lib/lsb/init-functions && . /lib/lsb/init-functions || errQuit "/lib/lsb/init-functions manquant."
 test "$distroName" != "Ubuntu" && errQuit "La distribution n’est pas Ubuntu ou une des ses variantes officielles."
 test "$SHELL" != "/bin/bash" && errQuit "Shell non compatible. utilisez : bash"
-test "$arch" != "x86_64" errQuit "Système non compatible."
+test "$arch" != "x86_64" && errQuit "Système non compatible."
 test -z "$versionYear" && errQuit "Impossible d’évaluer la version de la distribution."
 ((EUID)) && errQuit "Vous devez lancer le script en root : sudo $0"
 
