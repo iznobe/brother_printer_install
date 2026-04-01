@@ -175,7 +175,6 @@ then
     usage
     errQuit "Erreur : trop d’arguments ou argument manquant dans une option."
 fi
-distroName="nn"
 ###########################
  # quelques vérifications #
 ###########################
