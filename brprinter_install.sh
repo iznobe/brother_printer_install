@@ -223,7 +223,7 @@ then
     mapfile -t t_printers < <(lsusb | grep "04f9:") # ID_VENDOR Brother: 04f9: . ID_VENDOR HP : 03f0:
     for p in "${t_printers[@]}"
     do
-        t_printer_name+=( "$(echo "$p" | grep -oP 'Inc \K[^ ]+')" )
+        t_printer_name+=( "$(echo "$p" | grep -oP 'Ltd \K[^ ]+')" )
         t_printer_IP+=( "USB" )
     done
 
