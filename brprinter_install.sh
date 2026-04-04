@@ -220,11 +220,12 @@ fi
 if test -z "$modelName"
 then
     # DÉTECTION AUTOMATIQUE ##### VERSION lsusb #####
-    for p in "$(lsusb | grep "04f9:")" # ID_VENDOR Brother: 04f9: . ID_VENDOR HP : 03f0:
+    mapfile -t t_printers < <(lsusb | grep "04f9:") # ID_VENDOR Brother: 04f9: . ID_VENDOR HP : 03f0:
+    for p in "${t_printers[@]}"
     do
-        t_printer_name+=( "$(echo "$p" | grep -oP 'Ltd \K[^ ]+')" )
-         t_printer_IP+=( "USB" )
-     done
+        t_printer_name+=( "$(echo "$p" | grep -oP 'Inc \K[^ ]+')" )
+        t_printer_IP+=( "USB" )
+    done
 
     # DÉTECTION AUTOMATIQUE ##### VERSION AVAHI-BROWSE #####
     mapfile -t t_printers < <(avahi-browse -d local _http._tcp -tkrp | gawk -F';' '/^=/ && /IPv4/ && /Brother/')
