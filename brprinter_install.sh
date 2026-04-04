@@ -218,7 +218,15 @@ then
 fi
 
 if test -z "$modelName"
-then # DÉTECTION AUTOMATIQUE ##### VERSION AVAHI-BROWSE #####
+then
+    # DÉTECTION AUTOMATIQUE ##### VERSION lsusb #####
+    for p in "$(lsusb | grep "04f9:")" # ID_VENDOR Brother: 04f9: . ID_VENDOR HP : 03f0:
+    do
+        t_printer_name+=( "$(echo "$p" | grep -oP 'Ltd \K[^ ]+')" )
+         t_printer_IP+=( "USB" )
+     done
+
+    # DÉTECTION AUTOMATIQUE ##### VERSION AVAHI-BROWSE #####
     mapfile -t t_printers < <(avahi-browse -d local _http._tcp -tkrp | gawk -F';' '/^=/ && /IPv4/ && /Brother/')
     for p in "${t_printers[@]}"
     do
@@ -600,6 +608,6 @@ else
     errQuit "Impossible de copier les bibliohèques pour le scanner , pas de dossier $libDir trouvé"
 fi
 
-echo -e "\\033[1;34m Vous pouvez consulter le avec journal la commande : cat $logFile \\033[0;0m"
+echo -e "\\033[1;34m Vous pouvez consulter le journal avec la commande : cat $logFile \\033[0;0m"
 echo -e "\\033[1;34m il est possible de supprimer le dossier temporaire du script avec la commande : rm -rf $tmpDir \\033[0;0m"
 chown -R "$user": "$tmpDir" "$logFile"
