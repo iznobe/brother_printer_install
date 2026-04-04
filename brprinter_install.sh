@@ -425,7 +425,7 @@ then
     errQuit "Rien à installer."
 else
     log "installation des paquets précédemment récupérés"
-    wich "${pkg2install[@]}" || dpkg --install --force-all "${pkg2install[@]}"
+    which "${pkg2install[@]}" || dpkg --install --force-all "${pkg2install[@]}"
     log_action_end_msg $?
 fi
 
