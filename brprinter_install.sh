@@ -237,8 +237,23 @@ then
             t_printer_IP+=( "USB" )
         else # reseau
             t_printer_IP+=( "$(echo "$p" | grep -oP '\.local\;\K[^\;]+')" )
+
         fi
     done
+    # A tester de façon a eviter les doublons entre USB et réseau.
+    #for p in "${t_printers[@]}"
+    #do
+    #    t_printer_name+=( "$(echo "$p" | grep -oP 'Brother\\032\K[^\\]+')" )
+
+    #    if [[ "$p" =~ '=;lo;' ]]; then # USB
+            #t_printer_IP+=( "USB" )
+    #        continue
+    #    else # reseau
+            t_printer_IP+=( "$(echo "$p" | grep -oP '\.local\;\K[^\;]+')" )
+            t_printer_IP+=( "USB" )
+    #    fi
+    #done
+
 
     case ${#t_printer_name[*]} in
         0) log "Aucune imprimante détectée !
