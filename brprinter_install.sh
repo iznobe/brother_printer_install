@@ -175,14 +175,13 @@ then
     usage
     errQuit "Erreur : trop d’arguments ou argument manquant dans une option."
 fi
-distroName="nn"
 ###########################
  # quelques vérifications #
 ###########################
-test -f /lib/lsb/init-functions && . /lib/lsb/init-functions || errQuit "/lib/lsb/init-functions manquant."
+if test -f /lib/lsb/init-functions; then . /lib/lsb/init-functions; else errQuit "/lib/lsb/init-functions manquant.";fi
 test "$distroName" != "Ubuntu" && errQuit "La distribution n’est pas Ubuntu ou une des ses variantes officielles."
 test "$SHELL" != "/bin/bash" && errQuit "Shell non compatible. utilisez : bash"
-test "$arch" != "x86_64" errQuit "Système non compatible."
+test "$arch" != "x86_64" && errQuit "Système non compatible."
 test -z "$versionYear" && errQuit "Impossible d’évaluer la version de la distribution."
 ((EUID)) && errQuit "Vous devez lancer le script en root : sudo $0"
 
@@ -190,10 +189,10 @@ test -z "$versionYear" && errQuit "Impossible d’évaluer la version de la dist
  # prérequis pour le script #
 #############################
 # a remettre le script en service
-# if test -f "$logFile"; then
-#     Old_Date="$(head -n1 "$logFile")"
-#     mv -v "$logFile" "$logFile"."$Old_Date".log
-# fi
+ if test -f "$logFile"; then
+     Old_Date="$(head -n1 "$logFile")"
+     mv -v "$logFile" "$logFile"."$Old_Date".log
+ fi
 echo "$date" > "$logFile" # indispensable pour la rotation du log .
 
 log "   # Ubuntu Codename : $codeName
@@ -205,11 +204,12 @@ log "   # Ubuntu Codename : $codeName
         # Fichier journal : $logFile" "Blue"
 
 log "verification de la connecion au site Brother"
-nc -z -w3 'brother.com' 80 && log_action_end_msg $? || errQuit "Site brother injoignable."
+if nc -z -w3 'brother.com' 80; then log_action_end_msg $?; else errQuit "Site brother injoignable.";fi
+
 log "Mise à jour des paquets"
 apt-get update -qq
 log_action_end_msg $?
-install_pkg "wget" "libxml2-utils" "gawk" "avahi-utils"
+install_pkg "wget" "curl" "libxml2-utils" "gawk" "avahi-utils"
 
 if ! test -d "$tmpDir"
 then
@@ -218,17 +218,42 @@ then
 fi
 
 if test -z "$modelName"
-then # DÉTECTION AUTOMATIQUE ##### VERSION AVAHI-BROWSE #####
+then
+    # DÉTECTION AUTOMATIQUE ##### VERSION lsusb #####
+    mapfile -t t_printers < <(lsusb | grep "04f9:") # ID_VENDOR Brother: 04f9: . ID_VENDOR HP : 03f0:
+    for p in "${t_printers[@]}"
+    do
+        t_printer_name+=( "$(echo "$p" | grep -oP 'Ltd \K[^ ]+')" )
+        t_printer_IP+=( "USB" )
+    done
+
+    # DÉTECTION AUTOMATIQUE ##### VERSION AVAHI-BROWSE #####
     mapfile -t t_printers < <(avahi-browse -d local _http._tcp -tkrp | gawk -F';' '/^=/ && /IPv4/ && /Brother/')
+    # for p in "${t_printers[@]}"
+    # do
+    #     t_printer_name+=( "$(echo "$p" | grep -oP 'Brother\\032\K[^\\]+')" )
+
+    #     if [[ "$p" =~ '=;lo;' ]]; then # USB
+    #         t_printer_IP+=( "USB" )
+    #     else # reseau
+    #         t_printer_IP+=( "$(echo "$p" | grep -oP '\.local\;\K[^\;]+')" )
+
+    #     fi
+    # done
+    # A tester de façon a eviter les doublons entre USB et réseau.
     for p in "${t_printers[@]}"
     do
         t_printer_name+=( "$(echo "$p" | grep -oP 'Brother\\032\K[^\\]+')" )
+
         if [[ "$p" =~ '=;lo;' ]]; then # USB
-            t_printer_IP+=( "USB" )
+            #t_printer_IP+=( "USB" )
+            continue
         else # reseau
             t_printer_IP+=( "$(echo "$p" | grep -oP '\.local\;\K[^\;]+')" )
+            t_printer_IP+=( "USB" )
         fi
     done
+
 
     case ${#t_printer_name[*]} in
         0) log "Aucune imprimante détectée !
@@ -239,6 +264,7 @@ then # DÉTECTION AUTOMATIQUE ##### VERSION AVAHI-BROWSE #####
         1)  log "Une seule imprimante détectée."
             modelName=${t_printer_name[0]} # ! t_printer_name != printerName
             IP=${t_printer_IP[0]}
+            echo "$modelName ====>>>> $IP"
             log_action_end_msg 0
             # pas besoin de poser de question, il ne reste plus qu’à installer
             ;;
@@ -483,11 +509,12 @@ fi
 
 if test -z "$IP";then
     log "Installation de l'imprimante USB"
-    lpadmin -p "$modelName" -c brother -E -v 'usb://dev/usb/lp0'
+    # lpadmin -p C5710 -v ipp://192.168.1.49/ipp/print -E -m everywhere
+    lpadmin -p "$modelName" -E -v 'usb://dev/usb/lp0'
     log_action_end_msg $?
 elif test -n "$IP";then
     log "Installation de l'imprimante en réseau"
-    lpadmin -p "$modelName" -c brother -E -v "lpd://$IP/binary_p1"
+    lpadmin -p "$modelName" -E -v "lpd://$IP/binary_p1"
     log_action_end_msg $?
 else
     errQuit "Impossible d'installer l'imprimante"
@@ -598,6 +625,6 @@ else
     errQuit "Impossible de copier les bibliohèques pour le scanner , pas de dossier $libDir trouvé"
 fi
 
-echo -e "\\033[1;34m Vous pouvez consulter le avec journal la commande : cat $logFile \\033[0;0m"
+echo -e "\\033[1;34m Vous pouvez consulter le journal avec la commande : cat $logFile \\033[0;0m"
 echo -e "\\033[1;34m il est possible de supprimer le dossier temporaire du script avec la commande : rm -rf $tmpDir \\033[0;0m"
 chown -R "$user": "$tmpDir" "$logFile"
