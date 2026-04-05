@@ -509,11 +509,11 @@ fi
 
 if test -z "$IP";then
     log "Installation de l'imprimante USB"
-    lpadmin -p "$modelName" -c brother -E -v 'usb://dev/usb/lp0'
+    lpadmin -p "$modelName"  -E -v 'usb://dev/usb/lp0'
     log_action_end_msg $?
 elif test -n "$IP";then
     log "Installation de l'imprimante en réseau"
-    lpadmin -p "$modelName" -c brother -E -v "lpd://$IP/binary_p1"
+    lpadmin -p "$modelName"  -E -v "lpd://$IP/binary_p1"
     log_action_end_msg $?
 else
     errQuit "Impossible d'installer l'imprimante"
