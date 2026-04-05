@@ -228,7 +228,7 @@ then
     done
 
     # DÉTECTION AUTOMATIQUE ##### VERSION AVAHI-BROWSE #####
-    mapfile -t t_printers < <(avahi-browse -d local _http._tcp -tkrp | gawk -F';' '/^=/ && /IPv4/ && /Brother/')
+    #mapfile -t t_printers < <(avahi-browse -d local _http._tcp -tkrp | gawk -F';' '/^=/ && /IPv4/ && /Brother/')
     # for p in "${t_printers[@]}"
     # do
     #     t_printer_name+=( "$(echo "$p" | grep -oP 'Brother\\032\K[^\\]+')" )
@@ -240,18 +240,17 @@ then
 
     #     fi
     # done
+
     # A tester de façon a eviter les doublons entre USB et réseau.
+    # DÉTECTION AUTOMATIQUE ##### VERSION ! FULL ! AVAHI-BROWSE #####
+# commande récupération a verifier avec une imprimante UNIQUEMENT USB :
+# avahi-browse -rt _uscan._tcp !!!!
+
+    mapfile -t t_printers < <(avahi-browse -d local _http._tcp -tkrp | gawk -F';' '/^=/ && /IPv4/ && /Brother/')
     for p in "${t_printers[@]}"
     do
+        t_printer_IP+=( "$(echo "$p" | grep -oP '\.local\;\K[^\;]+')" )
         t_printer_name+=( "$(echo "$p" | grep -oP 'Brother\\032\K[^\\]+')" )
-
-        if [[ "$p" =~ '=;lo;' ]]; then # USB
-            #t_printer_IP+=( "USB" )
-            continue
-        else # reseau
-            t_printer_IP+=( "$(echo "$p" | grep -oP '\.local\;\K[^\;]+')" )
-            t_printer_IP+=( "USB" )
-        fi
     done
 
 
@@ -317,7 +316,7 @@ do
             ;;
     esac
 done
-if test "$IP" = "USB"
+if test "$IP" = "USB" -a "$IP" = "127.0.0.1"
 then
     log "Installation en USB."
     log_action_end_msg 0
@@ -456,57 +455,6 @@ fi
 ##################################
  # configuration de l’imprimante #
 ##################################
-# retrouver le fichier `.ppd' pour l'imprimante
-# for drv in "PRN_CUP_DEB" "PRN_DRV_DEB"
-# do
-#     pkg=${t_printer[$drv]}
-#     if test -n "$pkg" -a -f "$tmpDir/$pkg"
-#     then
-#         while read -rd '' fileName
-#         do
-#             PPDs+=( "$fileName" )
-#         done < <(dpkg --contents "$tmpDir/$pkg" | gawk 'BEGIN{ORS="\0"} /ppd/{sub(".","",$NF); print $NF}')
-#     fi
-# done
-# if test -z "$Ppd_File"
-# then
-#     PPDs=( /usr/share/cups/model/**/*brother*@($printerName|$modelName)*.ppd )
-# fi
-# if test -n "$IP"; then
-#     case ${#PPDs[*]} in
-#         0) log "Pas de fichier ppd trouvé." "Red"
-#            err+="1"
-#            ;;
-#         1) log "Un fichier ppd trouvé."
-#            Ppd_File=${PPDs[0]}
-#            ;;
-#         *) err+="1"
-#            log "Plusieurs fichier ppd trouvés."
-#            Ppd_File=${PPDs[0]}
-#            ;;
-#     esac
-# else
-
-# if test -n "$IP" -a -n "$Ppd_File";then
-#     log "Installation de l'imprimante en réseau"
-#     lpadmin -p "$modelName" -E -v "lpd://$IP/binary_p1" -P "$Ppd_File"
-#     log_action_end_msg $?
-# elif test -z "$IP" -a -n "$Ppd_File";then
-#     log "Installation de l'imprimante USB"
-#     lpadmin -p "$modelName" -E -v 'usb://dev/usb/lp0' -P "$Ppd_File"
-#     log_action_end_msg $?
-# elif test -z "$IP" -a -z "$Ppd_File";then
-#     log "Installation de l'imprimante USB"
-#     lpadmin -p "$modelName" -E -v 'usb://dev/usb/lp0'
-#     log_action_end_msg $?
-# elif test -n "$IP" -a -z "$Ppd_File";then
-#     log "Installation de l'imprimante en réseau"
-#     lpadmin -p "$modelName" -E -v "lpd://$IP/binary_p1"
-#     log_action_end_msg $?
-# else
-#     errQuit "Impossible d'installer l'imprimante"
-# fi
-
 if test -z "$IP";then
     log "Installation de l'imprimante USB"
     # lpadmin -p C5710 -v ipp://192.168.1.49/ipp/print -E -m everywhere
