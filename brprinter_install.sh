@@ -44,7 +44,7 @@ libDir="/usr/lib/$arch-linux-gnu"
 declare -u modelName
 declare -A t_printer
 declare -i err
-declare -a t_printer_IP t_printer_name
+declare -a t_printer_IP t_printer_model
 
 ##################
  # infos Brother #
@@ -178,7 +178,7 @@ fi
 ###########################
  # quelques vérifications #
 ###########################
-if test -f /lib/lsb/init-functions; then . /lib/lsb/init-functions; else errQuit "/lib/lsb/init-functions manquant.";fi
+if test -f /lib/lsb/init-functions; then . /lib/lsb/init-functions; else errQuit "/lib/lsb/init-functions manquant."; fi
 test "$distroName" != "Ubuntu" && errQuit "La distribution n’est pas Ubuntu ou une des ses variantes officielles."
 test "$SHELL" != "/bin/bash" && errQuit "Shell non compatible. utilisez : bash"
 test "$arch" != "x86_64" && errQuit "Système non compatible."
@@ -217,51 +217,35 @@ then
     log2file_o "création du répertoire $tmpDir"
 fi
 
+# unset ${t_printers[@]} ${t_printer_IP[@]} ${t_printer_model[@]}
 if test -z "$modelName"
 then
     # DÉTECTION AUTOMATIQUE ##### VERSION lsusb #####
     mapfile -t t_printers < <(lsusb | grep "04f9:") # ID_VENDOR Brother: 04f9: . ID_VENDOR HP : 03f0:
     for p in "${t_printers[@]}"
     do
-        t_printer_name+=( "$(echo "$p" | grep -oP 'Ltd \K[^ ]+')" )
+        t_printer_model+=( "$(echo "$p" | grep -oP 'Ltd \K[^ ]+')" )
         t_printer_IP+=( "USB" )
     done
 
-    # DÉTECTION AUTOMATIQUE ##### VERSION AVAHI-BROWSE #####
-    #mapfile -t t_printers < <(avahi-browse -d local _http._tcp -tkrp | gawk -F';' '/^=/ && /IPv4/ && /Brother/')
-    # for p in "${t_printers[@]}"
-    # do
-    #     t_printer_name+=( "$(echo "$p" | grep -oP 'Brother\\032\K[^\\]+')" )
-
-    #     if [[ "$p" =~ '=;lo;' ]]; then # USB
-    #         t_printer_IP+=( "USB" )
-    #     else # reseau
-    #         t_printer_IP+=( "$(echo "$p" | grep -oP '\.local\;\K[^\;]+')" )
-
-    #     fi
-    # done
-
     # A tester de façon a eviter les doublons entre USB et réseau.
-    # DÉTECTION AUTOMATIQUE ##### VERSION ! FULL ! AVAHI-BROWSE #####
-# commande récupération a verifier avec une imprimante UNIQUEMENT USB :
-# avahi-browse -rt _uscan._tcp !!!!
-
-    mapfile -t t_printers < <(avahi-browse -d local _http._tcp -tkrp | gawk -F';' '/^=/ && /IPv4/ && /Brother/')
+    # DÉTECTION AUTOMATIQUE ##### VERSION RESEAU SEUL AVAHI-BROWSE #####
+    mapfile -t t_printers < <(avahi-browse -d local _http._tcp -tkrp | gawk -F';' '/^=/ && /IPv4/ && /Brother/ && !/127.0.0.1/ && !/USB/') # permet de ne pas récuperer les versions USB et "127.0.0.1"
     for p in "${t_printers[@]}"
     do
         t_printer_IP+=( "$(echo "$p" | grep -oP '\.local\;\K[^\;]+')" )
-        t_printer_name+=( "$(echo "$p" | grep -oP 'Brother\\032\K[^\\]+')" )
+        t_printer_model+=( "$(echo "$p" | grep -oP 'Brother\\032\K[^\\]+')" )
     done
 
 
-    case ${#t_printer_name[*]} in
+    case ${#t_printer_model[*]} in
         0) log "Aucune imprimante détectée !
            Êtes vous sûr de l’avoir connectée au port USB de votre ordinateur ou à votre réseau local ?" "Red"
            log_action_end_msg 1
            # on repart donc avec les questions de base : modèle etc.
             ;;
         1)  log "Une seule imprimante détectée."
-            modelName=${t_printer_name[0]} # ! t_printer_name != printerName
+            modelName=${t_printer_model[0]} # ! t_printer_model != printerName
             IP=${t_printer_IP[0]}
             echo "$modelName ====>>>> $IP"
             log_action_end_msg 0
@@ -269,13 +253,18 @@ then
             ;;
         *)  log "Plusieurs imprimantes ont été détectées."
             # il faut presenter sous forme de liste les éléments recupérés :
-            # modèle du materriel : IP ou USB
+            # modèle du materiel : IP ou USB
             # et demander à l’utilisateur de choisir un numéro dans cette liste
             log_action_end_msg 0
-            n_print=$(("${#t_printer_name[@]}"))
-            for n in "${!t_printer_name[@]}"
+            n_print=$(("${#t_printer_model[@]}"))
+            for n in "${!t_printer_model[@]}"
             do
-                echo " $((n+1))  ⇒  ${t_printer_name[$n]}  :  ${t_printer_IP[$n]}"
+                if [[ "${t_printer_IP[$n]}" == "USB" ]] # USB
+                then
+                    echo " $((n+1))  ⇒  ${t_printer_model[$n]}  :  ${t_printer_IP[$n]} ==> install USB."
+                else
+                    echo " $((n+1))  ⇒  ${t_printer_model[$n]}  :  ${t_printer_IP[$n]} ==> install RESEAU."
+                fi
             done
             while test -z "$choix"
             do
@@ -286,7 +275,7 @@ then
                     unset choix
                 fi
             done
-            modelName="${t_printer_name[$choix-1]}"
+            modelName="${t_printer_model[$choix-1]}"
             IP=${t_printer_IP[$choix-1]}
             ;;
     esac
@@ -316,7 +305,8 @@ do
             ;;
     esac
 done
-if test "$IP" = "USB" -a "$IP" = "127.0.0.1"
+#if test "$IP" = "USB" -o "$IP" = "127.0.0.1"
+if test "$IP" = "USB"
 then
     log "Installation en USB."
     log_action_end_msg 0
